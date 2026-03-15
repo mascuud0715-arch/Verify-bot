@@ -79,13 +79,19 @@ def system_status():
 
 def verify_user(uid):
 
-    bots_status, verify_status = system_status()
+    sys = system_collection.find_one({"name": "system"})
 
-    # VERIFY OFF → qof walba wuu isticmaali karaa
+    # haddii system record ma jiro
+    if not sys:
+        return True
+
+    verify_status = sys.get("verify_status", True)
+
+    # VERIFY OFF → qof walba waa isticmaali karaa
     if verify_status == False:
         return True
 
-    # VERIFY ON → check code
+    # VERIFY ON → code check
     data = codes_collection.find_one({"user_id": uid})
 
     if not data:
