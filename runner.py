@@ -72,15 +72,19 @@ def downloader_enabled():
 
 def verify_user(uid):
 
-    data = codes_collection.find_one({"code": code})
+    data = codes_collection.find_one({"user_id": uid})
 
-if not data:
+    if not data:
+        return False
 
-    bot.send_message(
-        message.chat.id,
-        "❌ Invalid code"
-    )
-    return
+    # CHECK EXPIRE
+    if data.get("expire", 0) < time.time():
+
+        codes_collection.delete_one({"user_id": uid})
+
+        return False
+
+    return True
 
 # CHECK EXPIRE
 if data.get("expire",0) < time.time():
