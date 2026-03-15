@@ -154,15 +154,14 @@ def download_tiktok(url):
 
 def process_download(bot, chat_id, uid, url):
 
-    bot.send_message(chat_id,"⏳ Downloading...")
+    bot.send_message(chat_id, "⏳ Downloading...")
 
     result = download_tiktok(url)
 
-    print("Download result:",result)
+    print("Download result:", result)
 
     if not result:
-
-        bot.send_message(chat_id,"❌ Download failed")
+        bot.send_message(chat_id, "❌ Download failed")
         return
 
     bot_username = bot.get_me().username
@@ -181,13 +180,17 @@ def process_download(bot, chat_id, uid, url):
 
             bot.send_video(
                 chat_id,
-                open(path,"rb"),
-                caption=f"Via @{bot_username}"
+                open(path, "rb"),
+                caption=f"""📥 Downloaded Successfully
+
+🤖 Via @{bot_username}
+
+Created: @Verify_yourbot"""
             )
 
             downloads_collection.insert_one({
-                "type":"tiktok_video",
-                "user":uid
+                "type": "tiktok_video",
+                "user": uid
             })
 
         # -------- PHOTOS --------
@@ -201,19 +204,23 @@ def process_download(bot, chat_id, uid, url):
                 bot.send_photo(
                     chat_id,
                     photo,
-                    caption=f"Via @{bot_username}"
+                    caption=f"""📥 Downloaded Successfully
+
+🤖 Via @{bot_username}
+
+Created: @Verify_yourbot"""
                 )
 
             downloads_collection.insert_one({
-                "type":"tiktok_photo",
-                "user":uid
+                "type": "tiktok_photo",
+                "user": uid
             })
 
     except Exception as e:
 
-        print("SEND MEDIA ERROR:",e)
+        print("SEND MEDIA ERROR:", e)
 
-        bot.send_message(chat_id,"❌ Failed to send media")
+        bot.send_message(chat_id, "❌ Failed to send media")
 
 # -------- START USER BOT --------
 
@@ -245,9 +252,23 @@ def start_user_bot(token):
             if send_force_join(bot,message.chat.id):
                 return
 
-            bot.send_message(
-                message.chat.id,
-                "👋 Send TikTok link"
+              bot.send_message(
+    message.chat.id,
+    """👋 Welcome to TikTok Downloader Bot
+
+📥 Send any TikTok link and I will download it instantly.
+
+Features:
+• No watermark video
+• Photo slideshow download
+• Fast download
+
+Just send a TikTok link to begin.
+
+━━━━━━━━━━━━━━
+
+Create your own downloader:
+@Verify_yourbot"""
             )
 
         # -------- CONFIRM JOIN --------
