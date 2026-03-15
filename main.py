@@ -3,6 +3,14 @@ import json
 import os
 import requests
 from telebot.types import ReplyKeyboardMarkup
+from pymongo import MongoClient
+
+client = MongoClient(os.getenv("MONGO_URL"))
+
+db = client["telegram_system"]
+
+bots_collection = db["bots"]
+users_collection = db["users"]
 
 TOKEN = os.getenv("MAIN_BOT_TOKEN")
 
