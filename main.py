@@ -121,12 +121,9 @@ def start(message):
         f"""
 🤖 Welcome To Video Downloader
 
-Send a video link from:
+Send a video or photo link from:
 
 • TikTok
-• Instagram
-• Facebook
-• Pinterest
 
 The bot will download it instantly.
 
