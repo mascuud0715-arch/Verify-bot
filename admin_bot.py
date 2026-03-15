@@ -159,29 +159,47 @@ def media_stats(message):
 """
     )
 
+# ==============================
+# REMOVE BOT START
+# ==============================
+
+@bot.callback_query_handler(func=lambda c: c.data == "remove_bot")
+def remove_bot_start(call):
+
+    msg = bot.send_message(
+        call.message.chat.id,
+        "Send bot username to remove\nExample:\n@mybot"
+    )
+
+    bot.register_next_step_handler(msg, remove_bot_process)
+
 
 # ==============================
 # BOTS PANEL
 # ==============================
 
-@bot.message_handler(func=lambda m: m.text == "🤖 Bots")
-def bots_panel(message):
+kb = InlineKeyboardMarkup()
 
-    kb = InlineKeyboardMarkup()
-
-    kb.add(
-        InlineKeyboardButton(
-            "👤 Usernames",
-            callback_data="bot_usernames"
-        )
+kb.add(
+    InlineKeyboardButton(
+        "👤 Usernames",
+        callback_data="bot_usernames"
     )
+)
 
-    kb.add(
-        InlineKeyboardButton(
-            "🔑 API Tokens",
-            callback_data="bot_api"
-        )
+kb.add(
+    InlineKeyboardButton(
+        "🔑 API Tokens",
+        callback_data="bot_api"
     )
+)
+
+kb.add(
+    InlineKeyboardButton(
+        "🗑 Remove Bot",
+        callback_data="remove_bot"
+    )
+)
 
     bot.send_message(
         message.chat.id,
@@ -335,6 +353,27 @@ def close_channels(message):
     bot.send_message(
         message.chat.id,
         "❌ Force Join System Disabled"
+    )
+
+def remove_bot_process(message):
+
+    username = message.text.replace("@","").strip()
+
+    bot_data = bots_collection.find_one({"username": username})
+
+    if not bot_data:
+
+        bot.send_message(
+            message.chat.id,
+            "❌ Bot not found"
+        )
+        return
+
+    bots_collection.delete_one({"username": username})
+
+    bot.send_message(
+        message.chat.id,
+        f"✅ Bot @{username} removed from system"
     )
 
 
