@@ -26,6 +26,10 @@ channels_collection = db["channels"]
 
 running_bots = {}
 
+# -------- SAVE LINKS BEFORE JOIN --------
+
+pending_links = {}
+
 # -------- SAVE USER --------
 
 def save_user(uid):
@@ -61,10 +65,12 @@ def check_force_join(bot, user_id):
 
             member = bot.get_chat_member(ch["username"], user_id)
 
-            if member.status not in ["member", "administrator", "creator"]:
+            if member.status not in ["member","administrator","creator"]:
+
                 not_joined.append(ch["username"])
 
         except:
+
             not_joined.append(ch["username"])
 
     return not_joined
@@ -80,7 +86,7 @@ def send_force_join(bot, chat_id, channels):
         link = f"https://t.me/{ch.replace('@','')}"
 
         kb.add(
-            InlineKeyboardButton("JOIN", url=link)
+            InlineKeyboardButton("JOIN CHANNEL", url=link)
         )
 
     kb.add(
@@ -126,6 +132,61 @@ def download_tiktok(url):
         pass
 
     return None
+
+# -------- DOWNLOAD PROCESS --------
+
+def process_download(bot, message, url):
+
+    bot.send_message(
+        message.chat.id,
+        "⏳ Downloading..."
+    )
+
+    result = download_tiktok(url)
+
+    if not result:
+
+        bot.send_message(
+            message.chat.id,
+            "❌ Download failed"
+        )
+        return
+
+    bot_username = bot.get_me().username
+    uid = message.from_user.id
+
+    if result["type"] == "video":
+
+        bot.send_video(
+            message.chat.id,
+            result["media"],
+            caption=f"Via @{bot_username}"
+        )
+
+        downloads_collection.insert_one({
+            "type":"tiktok_video",
+            "user":uid
+        })
+
+    elif result["type"] == "photo":
+
+        for img in result["media"]:
+
+            bot.send_photo(
+                message.chat.id,
+                img,
+                caption=f"Via @{bot_username}"
+            )
+
+        downloads_collection.insert_one({
+            "type":"photo",
+            "user":uid
+        })
+
+    bot.send_message(
+        message.chat.id,
+        "Created: @Verify_yourbot"
+    )
 
 # -------- START USER BOT --------
 
@@ -181,14 +242,27 @@ def start_user_bot(token):
                     "❌ Join all channels first",
                     show_alert=True
                 )
-
                 return
 
-            bot.edit_message_text(
-                "✅ Verification successful\n\nSend TikTok link",
-                call.message.chat.id,
-                call.message.message_id
+            bot.answer_callback_query(
+                call.id,
+                "✅ Verification successful"
             )
+
+            # haddii link hore u jiray
+            if uid in pending_links:
+
+                url = pending_links.pop(uid)
+
+                process_download(bot, call.message, url)
+
+            else:
+
+                bot.edit_message_text(
+                    "✅ Verification successful\n\nSend TikTok link",
+                    call.message.chat.id,
+                    call.message.message_id
+                )
 
         # TIKTOK HANDLER
         @bot.message_handler(func=lambda m: m.text and "tiktok.com" in m.text)
@@ -203,67 +277,18 @@ def start_user_bot(token):
                 return
 
             uid = message.from_user.id
+            url = message.text
 
             not_joined = check_force_join(bot, uid)
 
             if not_joined:
 
+                pending_links[uid] = url
+
                 send_force_join(bot, message.chat.id, not_joined)
                 return
 
-            url = message.text
-
-            bot.send_message(
-                message.chat.id,
-                "⏳ Downloading..."
-            )
-
-            result = download_tiktok(url)
-
-            if not result:
-
-                bot.send_message(
-                    message.chat.id,
-                    "❌ Download failed"
-                )
-                return
-
-            bot_username = bot.get_me().username
-
-            # VIDEO
-            if result["type"] == "video":
-
-                bot.send_video(
-                    message.chat.id,
-                    result["media"],
-                    caption=f"Via @{bot_username}"
-                )
-
-                downloads_collection.insert_one({
-                    "type":"tiktok_video",
-                    "user":uid
-                })
-
-            # PHOTOS
-            elif result["type"] == "photo":
-
-                for img in result["media"]:
-
-                    bot.send_photo(
-                        message.chat.id,
-                        img,
-                        caption=f"Via @{bot_username}"
-                    )
-
-                downloads_collection.insert_one({
-                    "type":"photo",
-                    "user":uid
-                })
-
-            bot.send_message(
-                message.chat.id,
-                "Created: @Verify_yourbot"
-            )
+            process_download(bot, message, url)
 
         running_bots[token] = bot
 
