@@ -163,13 +163,23 @@ def start(message):
     text = """
 🤖 Welcome to Verify Bot System
 
-Add your Telegram bot and turn it into a downloader.
+This system allows you to connect your own Telegram bot and turn it into a powerful TikTok downloader.
 
-Steps:
+📥 What your bot will do:
+• Download TikTok videos
+• Download TikTok photo slides
+• Work automatically for your users
+• Show download credits via your bot
 
-1️⃣ Create bot via @BotFather
-2️⃣ Copy token
-3️⃣ Click Add Bot
+⚙️ How to setup your bot:
+
+1️⃣ Create a bot using @BotFather  
+2️⃣ Copy the Bot Token  
+3️⃣ Click ➕ Add Bot and send the token  
+
+🚀 After adding your bot, it will start automatically and become a TikTok downloader.
+
+Choose an option below to continue.
 """
 
     bot.send_message(
