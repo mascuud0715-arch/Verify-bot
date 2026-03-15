@@ -1,6 +1,7 @@
 import telebot
 import requests
 import os
+import time
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 from pymongo import MongoClient
 
@@ -27,30 +28,30 @@ downloads_collection = db["downloads"]
 def save_user(user):
 
     users_collection.update_one(
-        {"user_id":user.id},
-        {"$set":{
-            "user_id":user.id,
-            "username":user.username
+        {"user_id": user.id},
+        {"$set": {
+            "user_id": user.id,
+            "username": user.username
         }},
         upsert=True
     )
 
-# ================= CHECK SYSTEM =================
+# ================= SYSTEM STATUS =================
 
 def bots_active():
 
-    data = system_collection.find_one({"system":"bots"})
+    data = system_collection.find_one({"system": "bots"})
 
     if not data:
         return True
 
-    return data.get("active",True)
+    return data.get("active", True)
 
 # ================= FORCE JOIN CHECK =================
 
 def check_force_join(user_id):
 
-    channels = channels_collection.find({"active":True})
+    channels = channels_collection.find({"active": True})
 
     not_joined = []
 
@@ -60,7 +61,7 @@ def check_force_join(user_id):
 
             member = bot.get_chat_member(ch["username"], user_id)
 
-            if member.status not in ["member","administrator","creator"]:
+            if member.status not in ["member", "administrator", "creator"]:
 
                 not_joined.append(ch["username"])
 
@@ -81,7 +82,7 @@ def send_force_join(chat_id, channels):
         link = f"https://t.me/{ch.replace('@','')}"
 
         kb.add(
-            InlineKeyboardButton("JOIN", url=link)
+            InlineKeyboardButton("JOIN CHANNEL", url=link)
         )
 
     kb.add(
@@ -119,21 +120,19 @@ def start(message):
     bot.send_message(
         message.chat.id,
         f"""
-🤖 Welcome To Video Downloader
+🤖 Welcome To TikTok Downloader
 
-Send a video or photo link from:
-
-• TikTok
+Send a TikTok video or photo link.
 
 The bot will download it instantly.
 
-Powered by @Verify_yourbot
+Powered by @{bot.get_me().username}
 """
     )
 
 # ================= CONFIRM JOIN =================
 
-@bot.callback_query_handler(func=lambda call:call.data=="confirm_join")
+@bot.callback_query_handler(func=lambda call: call.data == "confirm_join")
 def confirm_join(call):
 
     not_joined = check_force_join(call.from_user.id)
@@ -149,12 +148,12 @@ def confirm_join(call):
         return
 
     bot.edit_message_text(
-        "✅ Verification successful\n\nSend a video link to download",
+        "✅ Verification successful\n\nSend TikTok link to download",
         call.message.chat.id,
         call.message.message_id
     )
 
-# ================= TIKTOK DOWNLOADER =================
+# ================= TIKTOK API =================
 
 def download_tiktok(url):
 
@@ -184,6 +183,7 @@ def download_tiktok(url):
 def handle_links(message):
 
     if not bots_active():
+
         bot.send_message(
             message.chat.id,
             "🚫 Bot is temporarily disabled"
@@ -195,7 +195,7 @@ def handle_links(message):
 
     text = message.text
 
-    # -------- CHECK FORCE JOIN --------
+    # -------- FORCE JOIN CHECK --------
 
     not_joined = check_force_join(message.from_user.id)
 
@@ -215,7 +215,7 @@ def handle_links(message):
 
         video, images = download_tiktok(text)
 
-        # -------- PHOTO SLIDESHOW --------
+        # -------- PHOTO SLIDES --------
 
         if images:
 
@@ -283,10 +283,9 @@ def handle_links(message):
 
         bot.send_message(
             message.chat.id,
-            "❌ Download failed"
-        )
+            "❌ Download failed")
 
-# ================= BOT RUN =================
+# ================= RUN BOT =================
 
 print("🚀 Downloader Bot Running...")
 
