@@ -5,32 +5,42 @@ import threading
 import requests
 import tempfile
 from concurrent.futures import ThreadPoolExecutor
-from telebot.types import InputMediaPhoto
 from pymongo import MongoClient
 
 # ================= ENV =================
 
 MONGO_URL = os.getenv("MONGO_URL")
-VERIFY_API = os.getenv("VERIFY_API")
 
 # ================= DATABASE =================
 
 client = MongoClient(MONGO_URL)
+
 db = client["verify_system"]
 
 bots_collection = db["bots"]
 users_collection = db["users"]
 downloads_collection = db["downloads"]
-system_collection = db["system"]
-channels_collection = db["channels"]
+
+# ================= HTTP SESSION (ULTRA FAST) =================
+
+session = requests.Session()
+
+adapter = requests.adapters.HTTPAdapter(
+    pool_connections=500,
+    pool_maxsize=500,
+    max_retries=3
+)
+
+session.mount("http://", adapter)
+session.mount("https://", adapter)
+
+# ================= THREAD POOL =================
+
+download_pool = ThreadPoolExecutor(max_workers=500)
 
 # ================= RUNNING BOTS =================
 
 running_bots = {}
-
-# ================= HIGH SPEED THREAD POOL =================
-
-download_pool = ThreadPoolExecutor(max_workers=200)
 
 # ================= SAVE USER =================
 
@@ -42,78 +52,129 @@ def save_user(uid):
         upsert=True
     )
 
-# ================= DOWNLOAD TIKTOK =================
+# ================= TIKTOK API =================
+
 def download_tiktok(url):
 
-    try:
+    for _ in range(3):
 
-        api = f"https://tikwm.com/api/?url={url}"
+        try:
 
-        r = requests.get(api, timeout=60).json()
+            api = f"https://tikwm.com/api/?url={url}"
 
-        if r["code"] != 0:
-            return None
+            r = session.get(api, timeout=60)
 
-        data = r["data"]
+            data = r.json()
 
-        if data.get("play"):
+            if data["code"] != 0:
+                continue
 
-            return {
-                "type": "video",
-                "media": data["play"]
-            }
+            d = data["data"]
 
-        if data.get("images"):
+            if d.get("play"):
 
-            return {
-                "type": "photo",
-                "media": data["images"]
-            }
+                return {
+                    "type": "video",
+                    "media": d["play"]
+                }
 
-    except Exception as e:
-        print("TikTok API Error:", e)
+            if d.get("images"):
+
+                return {
+                    "type": "photo",
+                    "media": d["images"]
+                }
+
+        except Exception as e:
+
+            print("TikTok API error:", e)
 
     return None
 
+# ================= DOWNLOAD VIDEO =================
+
+def download_video(url):
+
+    try:
+
+        r = session.get(url, stream=True, timeout=120)
+
+        with tempfile.NamedTemporaryFile(delete=False) as f:
+
+            for chunk in r.iter_content(1024 * 1024):
+
+                if chunk:
+                    f.write(chunk)
+
+            return f.name
+
+    except Exception as e:
+
+        print("Video download error:", e)
+
+    return None
+
+# ================= DOWNLOAD PHOTO =================
+
+def download_photo(url):
+
+    try:
+
+        r = session.get(url, stream=True, timeout=60)
+
+        with tempfile.NamedTemporaryFile(delete=False) as f:
+
+            for chunk in r.iter_content(1024 * 1024):
+
+                if chunk:
+                    f.write(chunk)
+
+            return f.name
+
+    except Exception as e:
+
+        print("Photo download error:", e)
+
+    return None
 
 # ================= PROCESS DOWNLOAD =================
 
 def process_download(bot, chat_id, uid, url):
 
-    bot.send_message(chat_id, "⏳ Downloading...")
-
-    result = download_tiktok(url)
-
-    if not result:
-
-        bot.send_message(chat_id, "❌ Download failed")
-        return
-
-    bot_username = bot.get_me().username
-
     try:
+
+        bot.send_message(chat_id, "⏳ Downloading...")
+
+        result = download_tiktok(url)
+
+        if not result:
+
+            bot.send_message(chat_id, "❌ Download failed")
+            return
+
+        bot_username = bot.get_me().username
 
         # ================= VIDEO =================
 
         if result["type"] == "video":
 
-            r = requests.get(result["media"], stream=True, timeout=120)
+            path = download_video(result["media"])
 
-            with tempfile.NamedTemporaryFile(delete=False) as f:
+            if not path:
 
-                for chunk in r.iter_content(chunk_size=1024*1024):
+                bot.send_message(chat_id, "❌ Video failed")
+                return
 
-                    if chunk:
-                        f.write(chunk)
+            with open(path, "rb") as v:
 
-                path = f.name
+                bot.send_video(
+                    chat_id,
+                    v,
+                    caption=f"Via @{bot_username}",
+                    supports_streaming=True
+                )
 
-            bot.send_video(
-                chat_id,
-                open(path, "rb"),
-                caption=f"Via @{bot_username}",
-                supports_streaming=True
-            )
+            os.remove(path)
 
             bot.send_message(
                 chat_id,
@@ -125,38 +186,25 @@ def process_download(bot, chat_id, uid, url):
                 "user": uid
             })
 
-
-        # ================= PHOTO SLIDESHOW =================
+        # ================= PHOTO =================
 
         elif result["type"] == "photo":
 
-            media_group = []
-
             for img in result["media"]:
 
-                r = requests.get(img, stream=True, timeout=60)
+                path = download_photo(img)
 
-                with tempfile.NamedTemporaryFile(delete=False) as f:
+                if not path:
+                    continue
 
-                    for chunk in r.iter_content(chunk_size=1024*1024):
+                with open(path, "rb") as p:
 
-                        if chunk:
-                            f.write(chunk)
-
-                    photo_path = f.name
-
-                media_group.append(
-                    InputMediaPhoto(
-                        open(photo_path, "rb")
+                    bot.send_photo(
+                        chat_id,
+                        p
                     )
-                )
 
-            if media_group:
-
-                bot.send_media_group(
-                    chat_id,
-                    media_group
-                )
+                os.remove(path)
 
             bot.send_message(
                 chat_id,
@@ -170,13 +218,9 @@ def process_download(bot, chat_id, uid, url):
 
     except Exception as e:
 
-        print("SEND MEDIA ERROR:", e)
+        print("Process error:", e)
 
-        bot.send_message(
-            chat_id,
-            "❌ Failed to send media"
-        )
-
+        bot.send_message(chat_id, "❌ Download error")
 
 # ================= START USER BOT =================
 
@@ -184,7 +228,11 @@ def start_user_bot(token):
 
     try:
 
-        bot = telebot.TeleBot(token, threaded=True)
+        bot = telebot.TeleBot(
+            token,
+            threaded=True,
+            num_threads=100
+        )
 
         running_bots[token] = bot
 
@@ -192,6 +240,7 @@ def start_user_bot(token):
         def start(message):
 
             uid = message.from_user.id
+
             save_user(uid)
 
             bot.send_message(
@@ -219,7 +268,7 @@ Create your own downloader:
             uid = message.from_user.id
             url = message.text.strip()
 
-            # HIGH SPEED THREAD DOWNLOAD
+            # HIGH SPEED DOWNLOAD
             download_pool.submit(
                 process_download,
                 bot,
@@ -228,13 +277,18 @@ Create your own downloader:
                 url
             )
 
-        print("🟢 Bot Started")
+        print("🟢 Bot Started:", token)
 
-        bot.infinity_polling(skip_pending=True)
+        bot.infinity_polling(
+            skip_pending=True,
+            timeout=60,
+            long_polling_timeout=60
+        )
 
     except Exception as e:
 
         print("❌ Bot start error:", e)
+
 
 # ================= RUNNER LOOP =================
 
@@ -245,19 +299,19 @@ while True:
     try:
 
         bots = list(bots_collection.find())
+
         active_tokens = []
 
-        # ================= START / STOP BOTS =================
+        # ===== START / STOP BOTS =====
 
         for b in bots:
 
             token = b.get("token")
+
             active = b.get("active", True)
 
             if not token:
                 continue
-
-            # ===== BOT SHOULD RUN =====
 
             if active:
 
@@ -273,8 +327,6 @@ while True:
                         daemon=True
                     ).start()
 
-            # ===== BOT SHOULD STOP =====
-
             else:
 
                 if token in running_bots:
@@ -282,9 +334,7 @@ while True:
                     print("🔴 Stopping bot:", token)
 
                     try:
-
                         running_bots[token].stop_polling()
-
                     except:
                         pass
 
@@ -293,8 +343,7 @@ while True:
                     except:
                         pass
 
-
-        # ================= REMOVE BOT =================
+        # ===== REMOVE BOT IF DELETED FROM DATABASE =====
 
         for token in list(running_bots.keys()):
 
@@ -303,9 +352,7 @@ while True:
                 print("🛑 Bot removed:", token)
 
                 try:
-
                     running_bots[token].stop_polling()
-
                 except:
                     pass
 
@@ -314,10 +361,8 @@ while True:
                 except:
                     pass
 
-
     except Exception as e:
 
         print("⚠ Runner error:", e)
 
-    # ===== LOOP DELAY =====
-    time.sleep(20)
+    time.sleep(15)
