@@ -3,6 +3,8 @@ import os
 import time
 from telebot.types import *
 from pymongo import MongoClient
+from flask import Flask, request, jsonify
+import threading
 
 # ================= ENV =================
 
@@ -21,19 +23,18 @@ bots_collection = db["bots"]
 users_collection = db["users"]
 channels_collection = db["channels"]
 
+# ================= FLASK APP =================
+
+app = Flask(__name__)
+
 # ================= MENU =================
 
 def main_menu():
 
     kb = ReplyKeyboardMarkup(resize_keyboard=True)
 
-    kb.add(
-        KeyboardButton("➕ Add Bot")
-    )
-
-    kb.add(
-        KeyboardButton("🤖 My Bots")
-    )
+    kb.add(KeyboardButton("➕ Add Bot"))
+    kb.add(KeyboardButton("🤖 My Bots"))
 
     return kb
 
@@ -54,7 +55,7 @@ def save_user(user):
 
 def check_channels(user_id):
 
-    channels = channels_collection.find({"active":True})
+    channels = channels_collection.find({"active": True})
 
     not_joined = []
 
@@ -64,15 +65,13 @@ def check_channels(user_id):
 
             member = bot.get_chat_member(
                 ch["username"],
-                user_id
+                int(user_id)
             )
 
             if member.status not in ["member","administrator","creator"]:
-
                 not_joined.append(ch["username"])
 
         except:
-
             not_joined.append(ch["username"])
 
     return not_joined
@@ -122,18 +121,17 @@ def start(message):
             message.chat.id,
             not_joined
         )
-
         return
 
     text = """
 🤖 Welcome to Verify Bot System
 
-Add your Telegram bot and turn it into a TikTok downloader.
+Add your Telegram bot and turn it into a downloader.
 
 Steps:
 
 1️⃣ Create bot via @BotFather
-2️⃣ Copy token
+2️⃣ Copy the token
 3️⃣ Click Add Bot
 """
 
@@ -236,7 +234,6 @@ def my_bots(message):
         found = True
 
     if not found:
-
         text = "❌ No bots yet"
 
     bot.send_message(
@@ -244,18 +241,55 @@ def my_bots(message):
         text
     )
 
-# ================= RUN =================
+# ================= VERIFY API =================
 
-print("🚀 Main Bot Running...")
+@app.route("/verify")
+def verify():
 
-while True:
+    user_id = request.args.get("user_id")
 
-    try:
+    if not user_id:
+        return jsonify({"status":"error"})
 
-        bot.infinity_polling(skip_pending=True)
+    not_joined = check_channels(user_id)
 
-    except Exception as e:
+    if not not_joined:
 
-        print(e)
+        return jsonify({
+            "status":"joined"
+        })
 
-        time.sleep(5)
+    else:
+
+        return jsonify({
+            "status":"not_joined",
+            "channels":not_joined
+        })
+
+# ================= RUN BOT =================
+
+def run_bot():
+
+    while True:
+
+        try:
+            bot.infinity_polling(skip_pending=True)
+
+        except Exception as e:
+
+            print(e)
+            time.sleep(5)
+
+# ================= START SYSTEM =================
+
+if __name__ == "__main__":
+
+    print("🚀 Main Bot Running...")
+    print("🌐 Verify API Running...")
+
+    threading.Thread(target=run_bot).start()
+
+    app.run(
+        host="0.0.0.0",
+        port=5000
+    )
