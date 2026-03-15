@@ -99,11 +99,13 @@ def process_download(bot, chat_id, uid, url):
 
         if result["type"] == "video":
 
-            video_data = requests.get(result["media"], timeout=120).content
+            r = requests.get(result["media"], stream=True, timeout=120)
 
-            with tempfile.NamedTemporaryFile(delete=False) as f:
-                f.write(video_data)
-                path = f.name
+with tempfile.NamedTemporaryFile(delete=False) as f:
+    for chunk in r.iter_content(chunk_size=1024*1024):
+        if chunk:
+            f.write(chunk)
+    path = f.name
 
             bot.send_video(
                 chat_id,
