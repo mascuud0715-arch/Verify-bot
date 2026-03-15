@@ -106,7 +106,6 @@ def start(message):
             message.chat.id,
             "❌ Not Allowed"
         )
-
         return
 
     bot.send_message(
@@ -159,47 +158,36 @@ def media_stats(message):
 """
     )
 
-# ==============================
-# REMOVE BOT START
-# ==============================
-
-@bot.callback_query_handler(func=lambda c: c.data == "remove_bot")
-def remove_bot_start(call):
-
-    msg = bot.send_message(
-        call.message.chat.id,
-        "Send bot username to remove\nExample:\n@mybot"
-    )
-
-    bot.register_next_step_handler(msg, remove_bot_process)
-
 
 # ==============================
 # BOTS PANEL
 # ==============================
 
-kb = InlineKeyboardMarkup()
+@bot.message_handler(func=lambda m: m.text == "🤖 Bots")
+def bots_panel(message):
 
-kb.add(
-    InlineKeyboardButton(
-        "👤 Usernames",
-        callback_data="bot_usernames"
-    )
-)
+    kb = InlineKeyboardMarkup()
 
-kb.add(
-    InlineKeyboardButton(
-        "🔑 API Tokens",
-        callback_data="bot_api"
+    kb.add(
+        InlineKeyboardButton(
+            "👤 Usernames",
+            callback_data="bot_usernames"
+        )
     )
-)
 
-kb.add(
-    InlineKeyboardButton(
-        "🗑 Remove Bot",
-        callback_data="remove_bot"
+    kb.add(
+        InlineKeyboardButton(
+            "🔑 API Tokens",
+            callback_data="bot_api"
+        )
     )
-)
+
+    kb.add(
+        InlineKeyboardButton(
+            "🗑 Remove Bot",
+            callback_data="remove_bot"
+        )
+    )
 
     bot.send_message(
         message.chat.id,
@@ -207,6 +195,10 @@ kb.add(
         reply_markup=kb
     )
 
+
+# ==============================
+# SHOW BOT USERNAMES
+# ==============================
 
 @bot.callback_query_handler(func=lambda call: call.data == "bot_usernames")
 def bot_usernames(call):
@@ -229,6 +221,10 @@ def bot_usernames(call):
         call.message.message_id
     )
 
+
+# ==============================
+# SHOW BOT TOKENS
+# ==============================
 
 @bot.callback_query_handler(func=lambda call: call.data == "bot_api")
 def bot_api(call):
@@ -253,7 +249,48 @@ def bot_api(call):
 
 
 # ==============================
+# REMOVE BOT START
+# ==============================
+
+@bot.callback_query_handler(func=lambda c: c.data == "remove_bot")
+def remove_bot_start(call):
+
+    msg = bot.send_message(
+        call.message.chat.id,
+        "Send bot username to remove\nExample:\n@mybot"
+    )
+
+    bot.register_next_step_handler(msg, remove_bot_process)
+
+
+# ==============================
+# REMOVE BOT PROCESS
+# ==============================
+
+def remove_bot_process(message):
+
+    username = message.text.replace("@","").strip()
+
+    bot_data = bots_collection.find_one({"username": username})
+
+    if not bot_data:
+
+        bot.send_message(
+            message.chat.id,
+            "❌ Bot not found"
+        )
+        return
+
+    bots_collection.delete_one({"username": username})
+
+    bot.send_message(
+        message.chat.id,
+        f"✅ Bot @{username} removed from system"
+    )
+
+# ==============================
 # ADD CHANNEL
+# ==============================
 
 @bot.message_handler(func=lambda m: m.text == "➕ Add Channel")
 def add_channel(message):
@@ -291,7 +328,6 @@ def save_channel(message):
         upsert=True
     )
 
-    # haddii channel la daro verify ON
     system_collection.update_one(
         {"system": "verify"},
         {"$set": {"active": True}},
@@ -318,6 +354,7 @@ def channels(message):
     count = 0
 
     for c in channels:
+
         text += c["username"] + "\n"
         count += 1
 
@@ -337,13 +374,11 @@ def channels(message):
 @bot.message_handler(func=lambda m: m.text == "❌ Close Channels")
 def close_channels(message):
 
-    # disable all channels
     channels_collection.update_many(
         {},
         {"$set": {"active": False}}
     )
 
-    # disable verify system
     system_collection.update_one(
         {"system": "verify"},
         {"$set": {"active": False}},
@@ -355,38 +390,17 @@ def close_channels(message):
         "❌ Force Join System Disabled"
     )
 
-def remove_bot_process(message):
-
-    username = message.text.replace("@","").strip()
-
-    bot_data = bots_collection.find_one({"username": username})
-
-    if not bot_data:
-
-        bot.send_message(
-            message.chat.id,
-            "❌ Bot not found"
-        )
-        return
-
-    bots_collection.delete_one({"username": username})
-
-    bot.send_message(
-        message.chat.id,
-        f"✅ Bot @{username} removed from system"
-    )
-
 
 # ==============================
 # CLOSE BOTS
 # ==============================
 
-@bot.message_handler(func=lambda m:m.text=="🚫 Close Bots")
+@bot.message_handler(func=lambda m: m.text == "🚫 Close Bots")
 def close_bots(message):
 
     system_collection.update_one(
-        {"system":"bots"},
-        {"$set":{"active":False}},
+        {"system": "bots"},
+        {"$set": {"active": False}},
         upsert=True
     )
 
@@ -400,12 +414,12 @@ def close_bots(message):
 # OPEN BOTS
 # ==============================
 
-@bot.message_handler(func=lambda m:m.text=="✅ Open Bots")
+@bot.message_handler(func=lambda m: m.text == "✅ Open Bots")
 def open_bots(message):
 
     system_collection.update_one(
-        {"system":"bots"},
-        {"$set":{"active":True}},
+        {"system": "bots"},
+        {"$set": {"active": True}},
         upsert=True
     )
 
@@ -419,12 +433,12 @@ def open_bots(message):
 # VERIFY ON
 # ==============================
 
-@bot.message_handler(func=lambda m:m.text=="🟢 Verify ON")
+@bot.message_handler(func=lambda m: m.text == "🟢 Verify ON")
 def verify_on(message):
 
     system_collection.update_one(
-        {"system":"verify"},
-        {"$set":{"active":True}},
+        {"system": "verify"},
+        {"$set": {"active": True}},
         upsert=True
     )
 
@@ -438,12 +452,12 @@ def verify_on(message):
 # VERIFY OFF
 # ==============================
 
-@bot.message_handler(func=lambda m:m.text=="🔴 Verify OFF")
+@bot.message_handler(func=lambda m: m.text == "🔴 Verify OFF")
 def verify_off(message):
 
     system_collection.update_one(
-        {"system":"verify"},
-        {"$set":{"active":False}},
+        {"system": "verify"},
+        {"$set": {"active": False}},
         upsert=True
     )
 
@@ -457,14 +471,14 @@ def verify_off(message):
 # BROADCAST MENU
 # ==============================
 
-@bot.message_handler(func=lambda m:m.text=="📢 Broadcast")
+@bot.message_handler(func=lambda m: m.text == "📢 Broadcast")
 def broadcast_menu(message):
 
     global broadcast_mode
 
-    broadcast_mode=True
-    broadcast_data["text"]=None
-    broadcast_data["buttons"]=[]
+    broadcast_mode = True
+    broadcast_data["text"] = None
+    broadcast_data["buttons"] = []
 
     bot.send_message(
         message.chat.id,
@@ -476,27 +490,27 @@ def broadcast_menu(message):
 # RECEIVE TEXT
 # ==============================
 
-@bot.message_handler(func=lambda m:broadcast_mode and broadcast_data["text"] is None)
+@bot.message_handler(func=lambda m: broadcast_mode and broadcast_data["text"] is None)
 def get_text(message):
 
-    broadcast_data["text"]=message.text
+    broadcast_data["text"] = message.text
 
-    kb=InlineKeyboardMarkup()
+    kb = InlineKeyboardMarkup()
 
     kb.add(
-        InlineKeyboardButton("➕ Add Inline",callback_data="add_inline")
+        InlineKeyboardButton("➕ Add Inline", callback_data="add_inline")
     )
 
     kb.add(
-        InlineKeyboardButton("🎨 Color",callback_data="color")
+        InlineKeyboardButton("🎨 Color", callback_data="color")
     )
 
     kb.add(
-        InlineKeyboardButton("👀 Preview",callback_data="preview")
+        InlineKeyboardButton("👀 Preview", callback_data="preview")
     )
 
     kb.add(
-        InlineKeyboardButton("📤 Send Broadcast",callback_data="send_bc")
+        InlineKeyboardButton("📤 Send Broadcast", callback_data="send_bc")
     )
 
     bot.send_message(
@@ -510,42 +524,41 @@ def get_text(message):
 # ADD INLINE BUTTON
 # ==============================
 
-@bot.callback_query_handler(func=lambda c:c.data=="add_inline")
+@bot.callback_query_handler(func=lambda c: c.data == "add_inline")
 def add_inline(call):
 
-    msg=bot.send_message(
+    msg = bot.send_message(
         call.message.chat.id,
         "Send button text"
     )
 
-    bot.register_next_step_handler(msg,inline_text)
+    bot.register_next_step_handler(msg, inline_text)
 
 
 def inline_text(message):
 
-    text=message.text
+    text = message.text
 
-    msg=bot.send_message(
+    msg = bot.send_message(
         message.chat.id,
         "Send button URL"
     )
 
-    bot.register_next_step_handler(msg,inline_url,text)
+    bot.register_next_step_handler(msg, inline_url, text)
 
 
-def inline_url(message,text):
+def inline_url(message, text):
 
-    if len(broadcast_data["buttons"])>=5:
+    if len(broadcast_data["buttons"]) >= 5:
 
         bot.send_message(
             message.chat.id,
             "❌ Max 5 buttons allowed"
         )
-
         return
 
     broadcast_data["buttons"].append(
-        (text,message.text)
+        (text, message.text)
     )
 
     bot.send_message(
@@ -558,21 +571,21 @@ def inline_url(message,text):
 # COLOR STYLE
 # ==============================
 
-@bot.callback_query_handler(func=lambda c:c.data=="color")
+@bot.callback_query_handler(func=lambda c: c.data == "color")
 def color_menu(call):
 
-    kb=InlineKeyboardMarkup()
+    kb = InlineKeyboardMarkup()
 
     kb.add(
-        InlineKeyboardButton("🔴 Red",callback_data="style_red")
+        InlineKeyboardButton("🔴 Red", callback_data="style_red")
     )
 
     kb.add(
-        InlineKeyboardButton("🟢 Green",callback_data="style_green")
+        InlineKeyboardButton("🟢 Green", callback_data="style_green")
     )
 
     kb.add(
-        InlineKeyboardButton("🔵 Blue",callback_data="style_blue")
+        InlineKeyboardButton("🔵 Blue", callback_data="style_blue")
     )
 
     bot.send_message(
@@ -582,17 +595,17 @@ def color_menu(call):
     )
 
 
-@bot.callback_query_handler(func=lambda c:c.data.startswith("style"))
+@bot.callback_query_handler(func=lambda c: c.data.startswith("style"))
 def set_style(call):
 
-    if call.data=="style_red":
-        broadcast_data["style"]="🔴"
+    if call.data == "style_red":
+        broadcast_data["style"] = "🔴"
 
-    if call.data=="style_green":
-        broadcast_data["style"]="🟢"
+    if call.data == "style_green":
+        broadcast_data["style"] = "🟢"
 
-    if call.data=="style_blue":
-        broadcast_data["style"]="🔵"
+    if call.data == "style_blue":
+        broadcast_data["style"] = "🔵"
 
     bot.send_message(
         call.message.chat.id,
@@ -604,12 +617,12 @@ def set_style(call):
 # PREVIEW
 # ==============================
 
-@bot.callback_query_handler(func=lambda c:c.data=="preview")
+@bot.callback_query_handler(func=lambda c: c.data == "preview")
 def preview(call):
 
-    text=f"{broadcast_data['style']} {broadcast_data['text']}"
+    text = f"{broadcast_data['style']} {broadcast_data['text']}"
 
-    kb=InlineKeyboardMarkup()
+    kb = InlineKeyboardMarkup()
 
     for b in broadcast_data["buttons"]:
 
@@ -631,8 +644,10 @@ def preview(call):
 # SEND BROADCAST
 # ==============================
 
-@bot.callback_query_handler(func=lambda c:c.data=="send_bc")
+@bot.callback_query_handler(func=lambda c: c.data == "send_bc")
 def send_broadcast(call):
+
+    global broadcast_mode
 
     text = f"{broadcast_data['style']} {broadcast_data['text']}"
 
@@ -657,7 +672,6 @@ def send_broadcast(call):
         try:
 
             send_bot = telebot.TeleBot(b["token"])
-
             bots_used += 1
 
             for u in users:
@@ -678,6 +692,7 @@ def send_broadcast(call):
         except:
             pass
 
+    broadcast_mode = False
 
     bot.send_message(
         call.message.chat.id,
