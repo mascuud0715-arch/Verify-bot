@@ -9,7 +9,7 @@ from pymongo import MongoClient
 # -------- ENV --------
 
 MONGO_URL = os.getenv("MONGO_URL")
-VERIFY_API = os.getenv("VERIFY_API")   # main bot api
+VERIFY_API = os.getenv("VERIFY_API")
 
 # -------- MONGODB --------
 
@@ -27,7 +27,7 @@ channels_collection = db["channels"]
 
 running_bots = {}
 
-# -------- SAVE LINKS BEFORE JOIN --------
+# -------- PENDING LINKS --------
 
 pending_links = {}
 
@@ -52,7 +52,7 @@ def bots_active():
 
     return s.get("active",True)
 
-# -------- VERIFY JOIN (MAIN BOT API) --------
+# -------- VERIFY JOIN --------
 
 def verify_join(user_id):
 
@@ -70,14 +70,12 @@ def verify_join(user_id):
 
         return {"status":"error"}
 
-# -------- FORCE JOIN MESSAGE --------
+# -------- FORCE JOIN --------
 
 def send_force_join(bot, chat_id):
 
-    # qaado channels active ah
-    channels = list(channels_collection.find({"active": True}))
+    channels = list(channels_collection.find({"active":True}))
 
-    # haddii channels jirin → ha dirin force join
     if len(channels) == 0:
         return False
 
@@ -89,14 +87,14 @@ def send_force_join(bot, chat_id):
 
         kb.add(
             InlineKeyboardButton(
-                "JOIN CHANNEL",
+                "📢 Join Channel",
                 url=link
             )
         )
 
     kb.add(
         InlineKeyboardButton(
-            "CONFIRM",
+            "✅ Confirm",
             callback_data="confirm_join"
         )
     )
@@ -109,7 +107,7 @@ def send_force_join(bot, chat_id):
 
     return True
 
-# -------- TIKTOK DOWNLOAD --------
+# -------- DOWNLOAD TIKTOK --------
 
 def download_tiktok(url):
 
@@ -143,32 +141,25 @@ def download_tiktok(url):
 
     return None
 
-# -------- DOWNLOAD PROCESS --------
+# -------- PROCESS DOWNLOAD --------
 
-def process_download(bot, message, url):
+def process_download(bot, chat_id, uid, url):
 
-    bot.send_message(
-        message.chat.id,
-        "⏳ Downloading..."
-    )
+    bot.send_message(chat_id,"⏳ Downloading...")
 
     result = download_tiktok(url)
 
     if not result:
 
-        bot.send_message(
-            message.chat.id,
-            "❌ Download failed"
-        )
+        bot.send_message(chat_id,"❌ Download failed")
         return
 
     bot_username = bot.get_me().username
-    uid = message.from_user.id
 
     if result["type"] == "video":
 
         bot.send_video(
-            message.chat.id,
+            chat_id,
             result["media"],
             caption=f"Via @{bot_username}"
         )
@@ -183,7 +174,7 @@ def process_download(bot, message, url):
         for img in result["media"]:
 
             bot.send_photo(
-                message.chat.id,
+                chat_id,
                 img,
                 caption=f"Via @{bot_username}"
             )
@@ -204,7 +195,8 @@ def start_user_bot(token):
 
         bot = telebot.TeleBot(token)
 
-        # START
+        # -------- START --------
+
         @bot.message_handler(commands=["start"])
         def start(message):
 
@@ -216,11 +208,20 @@ def start_user_bot(token):
                 )
                 return
 
-            save_user(message.from_user.id)
+            uid = message.from_user.id
+            save_user(uid)
 
-            send_force_join(bot, message.chat.id)
+            # FORCE JOIN
+            if send_force_join(bot,message.chat.id):
+                return
 
-        # CONFIRM JOIN
+            bot.send_message(
+                message.chat.id,
+                "👋 Send TikTok link"
+            )
+
+        # -------- CONFIRM JOIN --------
+
         @bot.callback_query_handler(func=lambda call:call.data=="confirm_join")
         def confirm(call):
 
@@ -228,7 +229,7 @@ def start_user_bot(token):
 
             r = verify_join(uid)
 
-            if r["status"] != "joined":
+            if r.get("status") != "joined":
 
                 bot.answer_callback_query(
                     call.id,
@@ -242,11 +243,17 @@ def start_user_bot(token):
                 "✅ Verification successful"
             )
 
+            # haddii link pending yahay
             if uid in pending_links:
 
                 url = pending_links.pop(uid)
 
-                process_download(bot, call.message, url)
+                process_download(
+                    bot,
+                    call.message.chat.id,
+                    uid,
+                    url
+                )
 
             else:
 
@@ -256,8 +263,9 @@ def start_user_bot(token):
                     call.message.message_id
                 )
 
-        # TIKTOK LINK
-        @bot.message_handler(func=lambda m: m.text and "tiktok.com" in m.text)
+        # -------- LINK HANDLER --------
+
+        @bot.message_handler(func=lambda m:m.text and "tiktok.com" in m.text)
         def tiktok(message):
 
             if not bots_active():
@@ -273,24 +281,29 @@ def start_user_bot(token):
 
             r = verify_join(uid)
 
-            if r["status"] != "joined":
+            if r.get("status") != "joined":
 
                 pending_links[uid] = url
 
-                send_force_join(bot, message.chat.id)
+                send_force_join(bot,message.chat.id)
                 return
 
-            process_download(bot, message, url)
+            process_download(
+                bot,
+                message.chat.id,
+                uid,
+                url
+            )
 
         running_bots[token] = bot
 
-        print("✅ Started bot")
+        print("✅ Bot Started")
 
         bot.infinity_polling(skip_pending=True)
 
     except Exception as e:
 
-        print("❌ Bot start error:", e)
+        print("❌ Bot start error:",e)
 
 # -------- LOAD BOTS --------
 
@@ -313,18 +326,16 @@ def load_all_bots():
                 daemon=True
             ).start()
 
-# -------- RUNNER LOOP --------
+# -------- RUNNER --------
 
 print("🚀 Runner Started...")
 
 while True:
 
     try:
-
         load_all_bots()
 
     except Exception as e:
-
-        print("Runner error:", e)
+        print("Runner error:",e)
 
     time.sleep(20)
