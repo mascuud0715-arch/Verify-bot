@@ -1,19 +1,20 @@
 import telebot
 import json
+import threading
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 
-def load_codes():
+def load_bots():
     try:
-        with open("codes.json") as f:
+        with open("bots.json") as f:
             return json.load(f)
     except:
-        return {}
+        return []
 
-def start_bot(token):
+def run_bot(token):
 
     bot = telebot.TeleBot(token)
 
-    verified_users = set()
+    verified_users=set()
 
     @bot.message_handler(commands=["start"])
     def start(message):
@@ -35,27 +36,28 @@ def start_bot(token):
             )
 
         else:
+
             bot.send_message(
                 message.chat.id,
-                "✅ Welcome! You are verified."
+                "✅ Welcome Verified User"
             )
 
-    @bot.message_handler(func=lambda m: True)
-    def verify_code(message):
-
-        codes = load_codes()
-
-        user_id = str(message.from_user.id)
-
-        if user_id in codes:
-
-            if message.text == str(codes[user_id]):
-
-                verified_users.add(message.from_user.id)
-
-                bot.send_message(
-                    message.chat.id,
-                    "✅ Verified Successfully!"
-                )
-
     bot.infinity_polling()
+
+def start_all():
+
+    bots = load_bots()
+
+    for b in bots:
+
+        t = threading.Thread(
+            target=run_bot,
+            args=(b["token"],)
+        )
+
+        t.start()
+
+start_all()
+
+while True:
+    pass
