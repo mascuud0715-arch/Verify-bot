@@ -45,12 +45,12 @@ def save_user(uid):
 
 def bots_active():
 
-    s = system_collection.find_one({"system":"bots"})
+    s = system_collection.find_one({"system": "bots"})
 
     if not s:
         return True
 
-    return s.get("active",True)
+    return s.get("active", True)
 
 # -------- VERIFY JOIN --------
 
@@ -60,28 +60,28 @@ def verify_join(user_id):
 
         r = requests.get(
             VERIFY_API,
-            params={"user_id":user_id},
+            params={"user_id": user_id},
             timeout=10
         )
 
         data = r.json()
 
         if "status" not in data:
-            return {"status":"joined"}
+            return {"status": "joined"}
 
         return data
 
     except Exception as e:
 
-        print("VERIFY API ERROR:",e)
+        print("VERIFY API ERROR:", e)
 
-        return {"status":"joined"}
+        return {"status": "joined"}
 
 # -------- FORCE JOIN --------
 
 def send_force_join(bot, chat_id):
 
-    channels = list(channels_collection.find({"active":True}))
+    channels = list(channels_collection.find({"active": True}))
 
     if len(channels) == 0:
         return False
@@ -132,20 +132,20 @@ def download_tiktok(url):
         if data.get("play"):
 
             return {
-                "type":"video",
-                "media":data["play"]
+                "type": "video",
+                "media": data["play"]
             }
 
         if data.get("images"):
 
             return {
-                "type":"photo",
-                "media":data["images"]
+                "type": "photo",
+                "media": data["images"]
             }
 
     except Exception as e:
 
-        print("TikTok API Error:",e)
+        print("TikTok API Error:", e)
 
     return None
 
@@ -165,28 +165,51 @@ def process_download(bot, chat_id, uid, url):
 
     bot_username = bot.get_me().username
 
-try:
+    try:
 
-    if result["type"] == "video":
+        # -------- VIDEO --------
 
-        video = requests.get(result["media"]).content
+        if result["type"] == "video":
 
-        with tempfile.NamedTemporaryFile(delete=False) as f:
-            f.write(video)
-            path = f.name
+            video = requests.get(result["media"]).content
 
-        # VIDEO + BOT NAME
-        bot.send_video(
-            chat_id,
-            open(path, "rb"),
-            caption=f"Via @{bot_username}"
-        )
+            with tempfile.NamedTemporaryFile(delete=False) as f:
+                f.write(video)
+                path = f.name
 
-        # MESSAGE KALE
-        bot.send_message(
-            chat_id,
-            "Created: @Verify_yourbot"
-        )
+            bot.send_video(
+                chat_id,
+                open(path, "rb"),
+                caption=f"Via @{bot_username}"
+            )
+
+            bot.send_message(
+                chat_id,
+                "Created: @Verify_yourbot"
+            )
+
+            downloads_collection.insert_one({
+                "type": "tiktok_video",
+                "user": uid
+            })
+
+        # -------- PHOTO SLIDESHOW --------
+
+        elif result["type"] == "photo":
+
+            for img in result["media"]:
+
+                photo = requests.get(img).content
+
+                bot.send_photo(
+                    chat_id,
+                    photo
+                )
+
+            bot.send_message(
+                chat_id,
+                f"Via @{bot_username}\n\nCreated: @Verify_yourbot"
+            )
 
             downloads_collection.insert_one({
                 "type": "tiktok_photo",
@@ -197,7 +220,10 @@ try:
 
         print("SEND MEDIA ERROR:", e)
 
-        bot.send_message(chat_id, "❌ Failed to send media")
+        bot.send_message(
+            chat_id,
+            "❌ Failed to send media"
+        )
 
 # -------- START USER BOT --------
 
@@ -250,7 +276,7 @@ Create your own downloader:
 
         # -------- CONFIRM JOIN --------
 
-        @bot.callback_query_handler(func=lambda call: call.data=="confirm_join")
+        @bot.callback_query_handler(func=lambda call: call.data == "confirm_join")
         def confirm(call):
 
             uid = call.from_user.id
@@ -330,7 +356,7 @@ Create your own downloader:
 
     except Exception as e:
 
-        print("❌ Bot start error:",e)
+        print("❌ Bot start error:", e)
 
 # -------- LOAD BOTS --------
 
@@ -363,6 +389,6 @@ while True:
         load_all_bots()
 
     except Exception as e:
-        print("Runner error:",e)
+        print("Runner error:", e)
 
     time.sleep(20)
