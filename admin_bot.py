@@ -236,14 +236,11 @@ def bot_api(call):
 
 # ==============================
 # ADD CHANNEL
-# ==============================
 
 @bot.message_handler(func=lambda m: m.text == "➕ Add Channel")
 def add_channel(message):
 
-    total = channels_collection.count_documents(
-        {"active": True}
-    )
+    total = channels_collection.count_documents({"active": True})
 
     if total >= 5:
 
@@ -251,18 +248,14 @@ def add_channel(message):
             message.chat.id,
             "❌ Maximum 5 channels allowed"
         )
-
         return
 
-    bot.send_message(
+    msg = bot.send_message(
         message.chat.id,
         "Send channel username\nExample:\n@channel"
     )
 
-    bot.register_next_step_handler(
-        message,
-        save_channel
-    )
+    bot.register_next_step_handler(msg, save_channel)
 
 
 def save_channel(message):
@@ -272,11 +265,18 @@ def save_channel(message):
     channels_collection.update_one(
         {"username": channel},
         {
-            "$set":{
+            "$set": {
                 "username": channel,
                 "active": True
             }
         },
+        upsert=True
+    )
+
+    # haddii channel la daro verify ON
+    system_collection.update_one(
+        {"system": "verify"},
+        {"$set": {"active": True}},
         upsert=True
     )
 
@@ -293,36 +293,48 @@ def save_channel(message):
 @bot.message_handler(func=lambda m: m.text == "📡 Channels")
 def channels(message):
 
-    channels = channels_collection.find(
-        {"active": True}
-    )
+    channels = channels_collection.find({"active": True})
 
     text = "📡 Force Join Channels\n\n"
 
-    for c in channels:
+    count = 0
 
+    for c in channels:
         text += c["username"] + "\n"
+        count += 1
+
+    if count == 0:
+        text = "❌ No active channels"
 
     bot.send_message(
         message.chat.id,
         text
     )
 
+
 # ==============================
 # CLOSE CHANNELS
 # ==============================
 
-@bot.message_handler(func=lambda m:m.text=="❌ Close Channels")
+@bot.message_handler(func=lambda m: m.text == "❌ Close Channels")
 def close_channels(message):
 
+    # disable all channels
     channels_collection.update_many(
         {},
-        {"$set":{"active":False}}
+        {"$set": {"active": False}}
+    )
+
+    # disable verify system
+    system_collection.update_one(
+        {"system": "verify"},
+        {"$set": {"active": False}},
+        upsert=True
     )
 
     bot.send_message(
         message.chat.id,
-        "❌ All channels disabled"
+        "❌ Force Join System Disabled"
     )
 
 
