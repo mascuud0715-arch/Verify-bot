@@ -51,7 +51,7 @@ def bots_active():
 
 def check_force_join(bot, user_id):
 
-    channels = channels_collection.find({"active":True})
+    channels = channels_collection.find({"active": True})
 
     not_joined = []
 
@@ -61,12 +61,10 @@ def check_force_join(bot, user_id):
 
             member = bot.get_chat_member(ch["username"], user_id)
 
-            if member.status not in ["member","administrator","creator"]:
-
+            if member.status not in ["member", "administrator", "creator"]:
                 not_joined.append(ch["username"])
 
         except:
-
             not_joined.append(ch["username"])
 
     return not_joined
