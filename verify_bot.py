@@ -5,7 +5,7 @@ from pymongo import MongoClient
 
 # ---------------- CONFIG ----------------
 
-TOKEN = os.getenv("BOT_TOKEN")
+TOKEN = os.getenv("VERIFY_BOT_TOKEN")
 MONGO_URL = os.getenv("MONGO_URL")
 
 bot = telebot.TeleBot(TOKEN)
