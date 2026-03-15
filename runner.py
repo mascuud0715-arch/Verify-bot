@@ -43,7 +43,6 @@ def save_user(uid):
     )
 
 # ================= DOWNLOAD TIKTOK =================
-
 def download_tiktok(url):
 
     try:
@@ -72,7 +71,6 @@ def download_tiktok(url):
             }
 
     except Exception as e:
-
         print("TikTok API Error:", e)
 
     return None
@@ -101,16 +99,20 @@ def process_download(bot, chat_id, uid, url):
 
             r = requests.get(result["media"], stream=True, timeout=120)
 
-with tempfile.NamedTemporaryFile(delete=False) as f:
-    for chunk in r.iter_content(chunk_size=1024*1024):
-        if chunk:
-            f.write(chunk)
-    path = f.name
+            with tempfile.NamedTemporaryFile(delete=False) as f:
+
+                for chunk in r.iter_content(chunk_size=1024*1024):
+
+                    if chunk:
+                        f.write(chunk)
+
+                path = f.name
 
             bot.send_video(
                 chat_id,
                 open(path, "rb"),
-                caption=f"Via @{bot_username}"
+                caption=f"Via @{bot_username}",
+                supports_streaming=True
             )
 
             bot.send_message(
@@ -123,6 +125,7 @@ with tempfile.NamedTemporaryFile(delete=False) as f:
                 "user": uid
             })
 
+
         # ================= PHOTO SLIDESHOW =================
 
         elif result["type"] == "photo":
@@ -131,10 +134,15 @@ with tempfile.NamedTemporaryFile(delete=False) as f:
 
             for img in result["media"]:
 
-                photo_data = requests.get(img, timeout=60).content
+                r = requests.get(img, stream=True, timeout=60)
 
                 with tempfile.NamedTemporaryFile(delete=False) as f:
-                    f.write(photo_data)
+
+                    for chunk in r.iter_content(chunk_size=1024*1024):
+
+                        if chunk:
+                            f.write(chunk)
+
                     photo_path = f.name
 
                 media_group.append(
