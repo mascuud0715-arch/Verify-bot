@@ -81,10 +81,11 @@ def verify_user(uid):
 
     bots_status, verify_status = system_status()
 
-    # haddii verify OFF
-    if not verify_status:
+    # VERIFY OFF → qof walba wuu isticmaali karaa
+    if verify_status == False:
         return True
 
+    # VERIFY ON → check code
     data = codes_collection.find_one({"user_id": uid})
 
     if not data:
