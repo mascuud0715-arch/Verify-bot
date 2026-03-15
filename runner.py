@@ -3,6 +3,7 @@ import os
 import time
 import threading
 import requests
+from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 from pymongo import MongoClient
 
 # -------- ENV --------
@@ -19,6 +20,7 @@ bots_collection = db["bots"]
 users_collection = db["users"]
 downloads_collection = db["downloads"]
 system_collection = db["system"]
+channels_collection = db["channels"]
 
 # -------- RUNNING BOTS --------
 
@@ -44,6 +46,54 @@ def bots_active():
         return True
 
     return s.get("active",True)
+
+# -------- FORCE JOIN CHECK --------
+
+def check_force_join(bot, user_id):
+
+    channels = channels_collection.find({"active":True})
+
+    not_joined = []
+
+    for ch in channels:
+
+        try:
+
+            member = bot.get_chat_member(ch["username"], user_id)
+
+            if member.status not in ["member","administrator","creator"]:
+
+                not_joined.append(ch["username"])
+
+        except:
+
+            not_joined.append(ch["username"])
+
+    return not_joined
+
+# -------- FORCE JOIN MESSAGE --------
+
+def send_force_join(bot, chat_id, channels):
+
+    kb = InlineKeyboardMarkup()
+
+    for ch in channels:
+
+        link = f"https://t.me/{ch.replace('@','')}"
+
+        kb.add(
+            InlineKeyboardButton("JOIN", url=link)
+        )
+
+    kb.add(
+        InlineKeyboardButton("CONFIRM", callback_data="confirm_join")
+    )
+
+    bot.send_message(
+        chat_id,
+        "⚠️ Please join all channels to continue",
+        reply_markup=kb
+    )
 
 # -------- TIKTOK DOWNLOAD --------
 
@@ -106,14 +156,44 @@ def start_user_bot(token):
 
             save_user(uid)
 
+            not_joined = check_force_join(bot, uid)
+
+            if not_joined:
+
+                send_force_join(bot, message.chat.id, not_joined)
+                return
+
             bot.send_message(
                 message.chat.id,
                 "🎬 Send TikTok link to download video or photos"
             )
 
+        # CONFIRM JOIN
+        @bot.callback_query_handler(func=lambda call:call.data=="confirm_join")
+        def confirm(call):
+
+            uid = call.from_user.id
+
+            not_joined = check_force_join(bot, uid)
+
+            if not_joined:
+
+                bot.answer_callback_query(
+                    call.id,
+                    "❌ Join all channels first",
+                    show_alert=True
+                )
+
+                return
+
+            bot.edit_message_text(
+                "✅ Verification successful\n\nSend TikTok link",
+                call.message.chat.id,
+                call.message.message_id
+            )
 
         # TIKTOK HANDLER
-        @bot.message_handler(func=lambda m: "tiktok.com" in m.text)
+        @bot.message_handler(func=lambda m: m.text and "tiktok.com" in m.text)
         def tiktok(message):
 
             if not bots_active():
@@ -122,6 +202,15 @@ def start_user_bot(token):
                     message.chat.id,
                     "⚠️ Bots are temporarily disabled"
                 )
+                return
+
+            uid = message.from_user.id
+
+            not_joined = check_force_join(bot, uid)
+
+            if not_joined:
+
+                send_force_join(bot, message.chat.id, not_joined)
                 return
 
             url = message.text
@@ -141,9 +230,7 @@ def start_user_bot(token):
                 )
                 return
 
-
             bot_username = bot.get_me().username
-
 
             # VIDEO
             if result["type"] == "video":
@@ -155,9 +242,9 @@ def start_user_bot(token):
                 )
 
                 downloads_collection.insert_one({
-                    "type":"tiktok_video"
+                    "type":"tiktok_video",
+                    "user":uid
                 })
-
 
             # PHOTOS
             elif result["type"] == "photo":
@@ -171,15 +258,14 @@ def start_user_bot(token):
                     )
 
                 downloads_collection.insert_one({
-                    "type":"photo"
+                    "type":"photo",
+                    "user":uid
                 })
-
 
             bot.send_message(
                 message.chat.id,
                 "Created: @Verify_yourbot"
             )
-
 
         running_bots[token] = bot
 
@@ -190,7 +276,6 @@ def start_user_bot(token):
     except Exception as e:
 
         print("❌ Bot start error:", e)
-
 
 # -------- LOAD BOTS --------
 
@@ -212,7 +297,6 @@ def load_all_bots():
                 args=(token,),
                 daemon=True
             ).start()
-
 
 # -------- RUNNER LOOP --------
 
