@@ -1,4 +1,5 @@
 pyTelegramBotAPI
-pymongo
 flask
+pymongo
 requests
+gunicorn
