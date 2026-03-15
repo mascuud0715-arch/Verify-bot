@@ -14,19 +14,14 @@ bot = telebot.TeleBot(TOKEN)
 # ---------- MONGODB ----------
 
 client = MongoClient(MONGO_URL)
+
 db = client["verify_system"]
 
 bots_collection = db["bots"]
 users_collection = db["users"]
 channels_collection = db["channels"]
-
-# ---------- STATES ----------
-
-broadcast_mode=False
-button_mode=False
-broadcast_text=""
-button_text=""
-button_link=""
+downloads_collection = db["downloads"]
+system_collection = db["system"]
 
 # ---------- MENU ----------
 
@@ -36,6 +31,10 @@ def admin_menu():
 
     kb.add(
         KeyboardButton("📊 Stats"),
+        KeyboardButton("📊 Media Stats")
+    )
+
+    kb.add(
         KeyboardButton("🤖 Bots")
     )
 
@@ -52,6 +51,11 @@ def admin_menu():
         KeyboardButton("❌ Close Channels")
     )
 
+    kb.add(
+        KeyboardButton("🚫 Close Bots"),
+        KeyboardButton("✅ Open Bots")
+    )
+
     return kb
 
 
@@ -61,7 +65,9 @@ def admin_menu():
 def start(message):
 
     if message.from_user.id != ADMIN_ID:
+
         bot.send_message(message.chat.id,"❌ Not Allowed")
+
         return
 
     bot.send_message(
@@ -86,6 +92,27 @@ def stats(message):
 
 🤖 Bots: {bots}
 👤 Users: {users}
+"""
+    )
+
+
+# ---------- MEDIA STATS ----------
+
+@bot.message_handler(func=lambda m:m.text=="📊 Media Stats")
+def media_stats(message):
+
+    tiktok = downloads_collection.count_documents({"type":"tiktok"})
+    photo = downloads_collection.count_documents({"type":"photo"})
+    total = downloads_collection.count_documents({})
+
+    bot.send_message(
+        message.chat.id,
+        f"""
+📥 DOWNLOAD STATS
+
+🎬 TikTok Videos: {tiktok}
+🖼 Photos: {photo}
+📦 Total Downloads: {total}
 """
     )
 
@@ -118,11 +145,13 @@ def bot_usernames(call):
     bots=bots_collection.find()
 
     text="🤖 Bots Usernames\n\n"
+
     i=1
 
     for b in bots:
 
         text+=f"{i}: {b.get('username')}\n"
+
         i+=1
 
     bot.edit_message_text(
@@ -138,17 +167,53 @@ def bot_api(call):
     bots=bots_collection.find()
 
     text="🔑 Bots API\n\n"
+
     i=1
 
     for b in bots:
 
         text+=f"{i}: {b.get('token')}\n\n"
+
         i+=1
 
     bot.edit_message_text(
         text,
         call.message.chat.id,
         call.message.message_id
+    )
+
+
+# ---------- CLOSE BOTS ----------
+
+@bot.message_handler(func=lambda m:m.text=="🚫 Close Bots")
+def close_bots(message):
+
+    system_collection.update_one(
+        {"system":"bots"},
+        {"$set":{"active":False}},
+        upsert=True
+    )
+
+    bot.send_message(
+        message.chat.id,
+        "🚫 All bots stopped"
+    )
+
+
+# ---------- OPEN BOTS ----------
+
+@bot.message_handler(func=lambda m:m.text=="✅ Open Bots")
+def open_bots(message):
+
+    system_collection.update_one(
+        {"system":"bots"},
+        {"$set":{"active":True}},
+        upsert=True
+    )
+
+    bot.send_message(
+        message.chat.id,
+        "✅ Bots activated"
     )
 
 
@@ -216,9 +281,11 @@ def channels(message):
     for c in channels:
 
         text+=c["username"]+"\n"
+
         found=True
 
     if not found:
+
         text="No active channels"
 
     bot.send_message(message.chat.id,text)
@@ -242,6 +309,8 @@ def close_channels(message):
 
 # ---------- BROADCAST ----------
 
+broadcast_mode=False
+
 @bot.message_handler(func=lambda m:m.text=="📢 Broadcast")
 def broadcast(message):
 
@@ -259,120 +328,40 @@ def broadcast(message):
 
 
 @bot.message_handler(func=lambda m:True)
-def broadcast_steps(message):
+def send_bc(message):
 
-    global broadcast_mode,button_mode,broadcast_text
+    global broadcast_mode
 
-    if message.from_user.id!=ADMIN_ID:
+    if not broadcast_mode:
         return
-
-    if broadcast_mode:
-
-        broadcast_text=message.text
-        broadcast_mode=False
-        button_mode=True
-
-        kb=ReplyKeyboardMarkup(resize_keyboard=True)
-        kb.add("Add Button","No Button")
-
-        bot.send_message(
-            message.chat.id,
-            "Add button?",
-            reply_markup=kb
-        )
-
-        return
-
-
-    if button_mode and message.text=="Add Button":
-
-        bot.send_message(
-            message.chat.id,
-            "Send button text"
-        )
-
-        bot.register_next_step_handler(message,get_button_text)
-        return
-
-
-    if button_mode and message.text=="No Button":
-
-        send_broadcast(message.chat.id,None)
-
-        button_mode=False
-
-        bot.send_message(
-            message.chat.id,
-            "✅ Broadcast Sent",
-            reply_markup=admin_menu()
-        )
-
-
-def get_button_text(message):
-
-    global button_text
-
-    button_text=message.text
-
-    bot.send_message(
-        message.chat.id,
-        "Send button link"
-    )
-
-    bot.register_next_step_handler(message,get_button_link)
-
-
-def get_button_link(message):
-
-    global button_link
-
-    button_link=message.text
-
-    kb=InlineKeyboardMarkup()
-
-    kb.add(
-        InlineKeyboardButton(button_text,url=button_link)
-    )
-
-    send_broadcast(message.chat.id,kb)
-
-
-def send_broadcast(chat_id,kb):
 
     users=users_collection.find()
-    bots=bots_collection.find()
 
     sent=0
 
-    for b in bots:
+    for u in users:
 
         try:
 
-            send_bot=telebot.TeleBot(b["token"])
+            bot.send_message(
+                u["user_id"],
+                message.text
+            )
 
-            for u in users:
-
-                try:
-
-                    if kb:
-                        send_bot.send_message(u["user_id"],broadcast_text,reply_markup=kb)
-                    else:
-                        send_bot.send_message(u["user_id"],broadcast_text)
-
-                    sent+=1
-
-                except:
-                    pass
+            sent+=1
 
         except:
             pass
 
+    broadcast_mode=False
 
     bot.send_message(
-        chat_id,
-        f"📢 Broadcast delivered to {sent} users"
+        message.chat.id,
+        f"📢 Broadcast delivered to {sent} users",
+        reply_markup=admin_menu()
     )
 
 
 print("Admin Bot Running...")
+
 bot.infinity_polling(skip_pending=True)
