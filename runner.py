@@ -56,17 +56,22 @@ def save_user(uid):
 
 def download_tiktok(url):
 
-    for _ in range(3):
+    for i in range(5):
 
         try:
 
             api = f"https://tikwm.com/api/?url={url}"
 
-            r = session.get(api, timeout=60)
+            headers = {
+                "User-Agent":"Mozilla/5.0"
+            }
+
+            r = session.get(api, headers=headers, timeout=60)
 
             data = r.json()
 
-            if data["code"] != 0:
+            if data.get("code") != 0:
+                time.sleep(1)
                 continue
 
             d = data["data"]
@@ -74,20 +79,19 @@ def download_tiktok(url):
             if d.get("play"):
 
                 return {
-                    "type": "video",
-                    "media": d["play"]
+                    "type":"video",
+                    "media":d["play"]
                 }
 
             if d.get("images"):
 
                 return {
-                    "type": "photo",
-                    "media": d["images"]
+                    "type":"photo",
+                    "media":d["images"]
                 }
 
-        except Exception as e:
-
-            print("TikTok API error:", e)
+        except:
+            time.sleep(1)
 
     return None
 
