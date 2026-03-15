@@ -7,12 +7,12 @@ import tempfile
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 from pymongo import MongoClient
 
-# -------- ENV --------
+# ================= ENV =================
 
 MONGO_URL = os.getenv("MONGO_URL")
 VERIFY_API = os.getenv("VERIFY_API")
 
-# -------- MONGODB --------
+# ================= DATABASE =================
 
 client = MongoClient(MONGO_URL)
 db = client["verify_system"]
@@ -23,15 +23,11 @@ downloads_collection = db["downloads"]
 system_collection = db["system"]
 channels_collection = db["channels"]
 
-# -------- RUNNING BOTS --------
+# ================= RUNNING BOTS =================
 
 running_bots = {}
 
-# -------- PENDING LINKS --------
-
-pending_links = {}
-
-# -------- SAVE USER --------
+# ================= SAVE USER =================
 
 def save_user(uid):
 
@@ -41,80 +37,7 @@ def save_user(uid):
         upsert=True
     )
 
-# -------- CHECK SYSTEM --------
-
-def bots_active():
-
-    s = system_collection.find_one({"system": "bots"})
-
-    if not s:
-        return True
-
-    return s.get("active", True)
-
-# -------- VERIFY JOIN --------
-
-def verify_join(user_id):
-
-    try:
-
-        r = requests.get(
-            VERIFY_API,
-            params={"user_id": user_id},
-            timeout=10
-        )
-
-        data = r.json()
-
-        if "status" not in data:
-            return {"status": "joined"}
-
-        return data
-
-    except Exception as e:
-
-        print("VERIFY API ERROR:", e)
-
-        return {"status": "joined"}
-
-# -------- FORCE JOIN --------
-
-def send_force_join(bot, chat_id):
-
-    channels = list(channels_collection.find({"active": True}))
-
-    if len(channels) == 0:
-        return False
-
-    kb = InlineKeyboardMarkup()
-
-    for ch in channels:
-
-        link = f"https://t.me/{ch['username'].replace('@','')}"
-
-        kb.add(
-            InlineKeyboardButton(
-                "📢 Join Channel",
-                url=link
-            )
-        )
-
-    kb.add(
-        InlineKeyboardButton(
-            "✅ Confirm",
-            callback_data="confirm_join"
-        )
-    )
-
-    bot.send_message(
-        chat_id,
-        "⚠️ Please join all channels to continue",
-        reply_markup=kb
-    )
-
-    return True
-
-# -------- DOWNLOAD TIKTOK --------
+# ================= DOWNLOAD TIKTOK =================
 
 def download_tiktok(url):
 
@@ -149,7 +72,8 @@ def download_tiktok(url):
 
     return None
 
-# -------- PROCESS DOWNLOAD --------
+
+# ================= PROCESS DOWNLOAD =================
 
 def process_download(bot, chat_id, uid, url):
 
@@ -158,12 +82,15 @@ def process_download(bot, chat_id, uid, url):
     result = download_tiktok(url)
 
     if not result:
+
         bot.send_message(chat_id, "❌ Download failed")
         return
 
     bot_username = bot.get_me().username
 
     try:
+
+        # ===== VIDEO =====
 
         if result["type"] == "video":
 
@@ -184,6 +111,13 @@ def process_download(bot, chat_id, uid, url):
                 "Created: @Verify_yourbot"
             )
 
+            downloads_collection.insert_one({
+                "type": "video",
+                "user": uid
+            })
+
+# ===== PHOTO SLIDESHOW =====
+
         elif result["type"] == "photo":
 
             for img in result["media"]:
@@ -200,6 +134,11 @@ def process_download(bot, chat_id, uid, url):
                 f"Via @{bot_username}\n\nCreated: @Verify_yourbot"
             )
 
+            downloads_collection.insert_one({
+                "type": "photo",
+                "user": uid
+            })
+
     except Exception as e:
 
         print("SEND MEDIA ERROR:", e)
@@ -209,7 +148,8 @@ def process_download(bot, chat_id, uid, url):
             "❌ Failed to send media"
         )
 
-# -------- START USER BOT --------
+
+# ================= START USER BOT =================
 
 def start_user_bot(token):
 
@@ -217,22 +157,14 @@ def start_user_bot(token):
 
         bot = telebot.TeleBot(token)
 
+        # store bot object si loo joojiyo haddii remove la sameeyo
+        running_bots[token] = bot
+
         @bot.message_handler(commands=["start"])
         def start(message):
 
-            if not bots_active():
-
-                bot.send_message(
-                    message.chat.id,
-                    "⚠️ Bots are temporarily disabled"
-                )
-                return
-
             uid = message.from_user.id
             save_user(uid)
-
-            if send_force_join(bot, message.chat.id):
-                return
 
             bot.send_message(
                 message.chat.id,
@@ -257,7 +189,7 @@ Create your own downloader:
         def tiktok(message):
 
             uid = message.from_user.id
-            url = message.text
+            url = message.text.strip()
 
             process_download(
                 bot,
@@ -266,7 +198,7 @@ Create your own downloader:
                 url
             )
 
-        print("✅ Bot Started")
+        print("🟢 Bot Started")
 
         bot.infinity_polling(skip_pending=True)
 
@@ -274,7 +206,8 @@ Create your own downloader:
 
         print("❌ Bot start error:", e)
 
-# -------- RUNNER LOOP --------
+
+# ================= RUNNER LOOP =================
 
 print("🚀 Runner Started...")
 
@@ -283,7 +216,6 @@ while True:
     try:
 
         bots = list(bots_collection.find())
-
         active_tokens = []
 
         for b in bots:
@@ -300,32 +232,39 @@ while True:
 
                 if token not in running_bots:
 
-                    t = threading.Thread(
+                    threading.Thread(
                         target=start_user_bot,
                         args=(token,),
                         daemon=True
-                    )
+                    ).start()
 
-                    t.start()
-
-                    running_bots[token] = True
-
-                    print("🟢 Bot Started:", token)
+                    print("🟢 Starting bot:", token)
 
             else:
 
+                # haddii admin remove sameeyo
                 if token in running_bots:
 
-                    print("🔴 Bot Removed:", token)
+                    print("🔴 Stopping bot:", token)
+
+                    try:
+                        running_bots[token].stop_polling()
+                    except:
+                        pass
 
                     del running_bots[token]
 
-        # remove bots not in database
+        # haddii bot database ka laga tirtiro
         for token in list(running_bots.keys()):
 
             if token not in active_tokens:
 
-                print("🛑 Bot Stopped:", token)
+                print("🛑 Bot removed:", token)
+
+                try:
+                    running_bots[token].stop_polling()
+                except:
+                    pass
 
                 del running_bots[token]
 
