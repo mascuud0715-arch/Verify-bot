@@ -79,19 +79,13 @@ def system_status():
 
 def verify_user(uid):
 
-    sys = system_collection.find_one({"name": "system"})
+    bots_status, verify_status = system_status()
 
-    # haddii system record ma jiro
-    if not sys:
-        return True
-
-    verify_status = sys.get("verify_status", True)
-
-    # VERIFY OFF → qof walba waa isticmaali karaa
+    # VERIFY OFF → qof walba wuu isticmaali karaa
     if verify_status == False:
         return True
 
-    # VERIFY ON → code check
+    # VERIFY ON → check code
     data = codes_collection.find_one({"user_id": uid})
 
     if not data:
@@ -111,7 +105,10 @@ def bots_enabled():
 
     bots_status, verify_status = system_status()
 
-    return bots_status
+    if bots_status == False:
+        return False
+
+    return True
 
 # ================= TIKTOK API =================
 
@@ -138,7 +135,7 @@ def download_tiktok(url):
 
             d = data["data"]
 
-            # PHOTO SLIDE
+            # PHOTO SLIDESHOW
             if d.get("images"):
 
                 return {
@@ -162,6 +159,7 @@ def download_tiktok(url):
 
     return None
 
+
 # ================= DOWNLOAD VIDEO =================
 
 def download_video(url):
@@ -181,9 +179,10 @@ def download_video(url):
 
     except Exception as e:
 
-        print("Video error:", e)
+        print("Video download error:", e)
 
     return None
+
 
 # ================= DOWNLOAD PHOTO =================
 
@@ -204,9 +203,10 @@ def download_photo(url):
 
     except Exception as e:
 
-        print("Photo error:", e)
+        print("Photo download error:", e)
 
     return None
+
 
 # ================= PROCESS DOWNLOAD =================
 
@@ -218,7 +218,6 @@ def process_download(bot, chat_id, uid, url):
             chat_id,
             "⛔ Bots are currently closed by admin."
         )
-
         return
 
     try:
@@ -229,7 +228,6 @@ def process_download(bot, chat_id, uid, url):
                 chat_id,
                 "⚠️ You must verify first.\n\nGo to @Verify_owner_bot and get your code."
             )
-
             return
 
         bot.send_message(chat_id, "⏳ Downloading...")
@@ -243,7 +241,8 @@ def process_download(bot, chat_id, uid, url):
 
         bot_username = bot.get_me().username
 
-        # VIDEO
+        # ================= VIDEO =================
+
         if result["type"] == "video":
 
             path = download_video(result["media"])
@@ -274,7 +273,8 @@ def process_download(bot, chat_id, uid, url):
                 "user": uid
             })
 
-        # PHOTO SLIDESHOW
+        # ================= PHOTO =================
+
         elif result["type"] == "photo":
 
             for img in result["media"]:
@@ -309,6 +309,7 @@ def process_download(bot, chat_id, uid, url):
 
         bot.send_message(chat_id, "❌ Error downloading")
 
+
 # ================= START USER BOT =================
 
 def start_user_bot(token):
@@ -322,8 +323,6 @@ def start_user_bot(token):
         )
 
         running_bots[token] = bot
-
-        # -------- START --------
 
         @bot.message_handler(commands=["start"])
         def start(message):
@@ -353,54 +352,7 @@ Create your own downloader:
 @Verify_yourbot"""
             )
 
-        # -------- VERIFY CODE --------
-
-        @bot.message_handler(func=lambda m: m.text and m.text.isdigit())
-        def verify_code(message):
-
-            uid = message.from_user.id
-            code = message.text.strip()
-
-            data = codes_collection.find_one({"code": code})
-
-            if not data:
-
-                bot.send_message(
-                    message.chat.id,
-                    "❌ Invalid code"
-                )
-                return
-
-            if data.get("expire", 0) < time.time():
-
-                bot.send_message(
-                    message.chat.id,
-                    "❌ Code expired"
-                )
-
-                codes_collection.delete_one({"code": code})
-
-                return
-
-            if data["user_id"] != uid:
-
-                bot.send_message(
-                    message.chat.id,
-                    "❌ This code is not yours"
-                )
-                return
-
-            codes_collection.update_one(
-                {"user_id": uid},
-                {"$set": {"verified": True}}
-            )
-
-            bot.send_message(
-                message.chat.id,
-                "✅ Verification successful\n\nSend TikTok link now."
-            )
-
-        # -------- TIKTOK LINK --------
+        # ===== TIKTOK LINK =====
 
         @bot.message_handler(func=lambda m: m.text and ("tiktok.com" in m.text or "vt.tiktok.com" in m.text))
         def tiktok(message):
@@ -443,12 +395,11 @@ while True:
 
         active_tokens = []
 
-        # haddii admin close bots
+        # ===== CLOSE BOTS =====
+
         if not bots_status:
 
             for token in list(running_bots.keys()):
-
-                print("🔴 Bots closed by admin:", token)
 
                 try:
                     running_bots[token].stop_polling()
@@ -463,7 +414,8 @@ while True:
             time.sleep(10)
             continue
 
-        # start bots
+        # ===== START BOTS =====
+
         for b in bots:
 
             token = b.get("token")
@@ -478,8 +430,6 @@ while True:
 
                 if token not in running_bots:
 
-                    print("🟢 Starting bot:", token)
-
                     threading.Thread(
                         target=start_user_bot,
                         args=(token,),
@@ -489,8 +439,6 @@ while True:
             else:
 
                 if token in running_bots:
-
-                    print("🔴 Stopping bot:", token)
 
                     try:
                         running_bots[token].stop_polling()
@@ -502,12 +450,11 @@ while True:
                     except:
                         pass
 
-        # remove bots haddii DB laga tiray
+        # ===== REMOVE BOTS =====
+
         for token in list(running_bots.keys()):
 
             if token not in active_tokens:
-
-                print("🛑 Bot removed:", token)
 
                 try:
                     running_bots[token].stop_polling()
