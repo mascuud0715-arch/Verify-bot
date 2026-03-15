@@ -165,46 +165,28 @@ def process_download(bot, chat_id, uid, url):
 
     bot_username = bot.get_me().username
 
-    try:
+try:
 
-        if result["type"] == "video":
+    if result["type"] == "video":
 
-            video = requests.get(result["media"]).content
+        video = requests.get(result["media"]).content
 
-            with tempfile.NamedTemporaryFile(delete=False) as f:
-                f.write(video)
-                path = f.name
+        with tempfile.NamedTemporaryFile(delete=False) as f:
+            f.write(video)
+            path = f.name
 
-            bot.send_video(
-                chat_id,
-                open(path, "rb"),
-                caption=f"""📥 Downloaded Successfully
+        # VIDEO + BOT NAME
+        bot.send_video(
+            chat_id,
+            open(path, "rb"),
+            caption=f"Via @{bot_username}"
+        )
 
-🤖 Via @{bot_username}
-
-Created: @Verify_yourbot"""
-            )
-
-            downloads_collection.insert_one({
-                "type": "tiktok_video",
-                "user": uid
-            })
-
-        elif result["type"] == "photo":
-
-            for img in result["media"]:
-
-                photo = requests.get(img).content
-
-                bot.send_photo(
-                    chat_id,
-                    photo,
-                    caption=f"""📥 Downloaded Successfully
-
-🤖 Via @{bot_username}
-
-Created: @Verify_yourbot"""
-                )
+        # MESSAGE KALE
+        bot.send_message(
+            chat_id,
+            "Created: @Verify_yourbot"
+        )
 
             downloads_collection.insert_one({
                 "type": "tiktok_photo",
