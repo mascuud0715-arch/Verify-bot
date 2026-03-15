@@ -233,12 +233,18 @@ def process_download(bot, chat_id, uid, url):
                     supports_streaming=True
                 )
 
+            bot.send_message(
+    chat_id,
+    "Created: @Verify_yourbot"
+            )
+
             os.remove(path)
+            )
 
             downloads_collection.insert_one({
                 "type": "video",
                 "user": uid
-            })
+              )
 
         # PHOTO SLIDESHOW
         elif result["type"] == "photo":
