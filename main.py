@@ -131,15 +131,21 @@ def start(message):
 
     save_user(message.from_user)
 
-    not_joined = check_channels(message.from_user.id)
+    # check if any active channels exist
+    active_channels = channels_collection.count_documents({"active":True})
 
-    if not_joined:
+    # haddii channels aysan jirin skip force join
+    if active_channels > 0:
 
-        send_force_join(
-            message.chat.id,
-            not_joined
-        )
-        return
+        not_joined = check_channels(message.from_user.id)
+
+        if not_joined:
+
+            send_force_join(
+                message.chat.id,
+                not_joined
+            )
+            return
 
     text = """
 🤖 Welcome to Verify Bot System
