@@ -35,6 +35,22 @@ users_collection = db["users"]
 channels_collection = db["channels"]
 system_collection = db["system"]
 
+# ================= INIT SYSTEM =================
+
+def init_system():
+
+    data = system_collection.find_one({"name":"system"})
+
+    if not data:
+
+        system_collection.insert_one({
+            "name":"system",
+            "bots_status":True,
+            "verify_status":True
+        })
+
+init_system()
+
 # ================= FLASK =================
 
 app = Flask(__name__)
