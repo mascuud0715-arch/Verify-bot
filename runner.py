@@ -72,12 +72,27 @@ def downloader_enabled():
 
 def verify_user(uid):
 
-    code = codes_collection.find_one({"user_id": uid})
+    data = codes_collection.find_one({"code": code})
 
-    if code:
-        return True
+if not data:
 
-    return False
+    bot.send_message(
+        message.chat.id,
+        "❌ Invalid code"
+    )
+    return
+
+# CHECK EXPIRE
+if data.get("expire",0) < time.time():
+
+    bot.send_message(
+        message.chat.id,
+        "❌ Code expired"
+    )
+
+    codes_collection.delete_one({"code":code})
+
+    return
 
 # ================= TIKTOK API =================
 
