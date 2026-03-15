@@ -1,150 +1,102 @@
 import telebot
-import json
 import os
-import time
-import requests
-from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
+import json
+from telebot.types import ReplyKeyboardMarkup, KeyboardButton
 
-# =========================
-# TOKEN FROM RAILWAY
-# =========================
 TOKEN = os.getenv("MAIN_BOT_TOKEN")
-
-if TOKEN is None:
-    print("MAIN_BOT_TOKEN not found")
-    exit()
 
 bot = telebot.TeleBot(TOKEN)
 
-# =========================
-# LOAD DATABASE
-# =========================
-FILE = "bots.json"
+def load_bots():
+    try:
+        with open("bots.json") as f:
+            return json.load(f)
+    except:
+        return {}
 
-try:
-    with open(FILE) as f:
-        bots = json.load(f)
-except:
-    bots = {}
+def save_bots(data):
+    with open("bots.json","w") as f:
+        json.dump(data,f)
 
-# =========================
-# SAVE DATABASE
-# =========================
-def save():
-    with open(FILE, "w") as f:
-        json.dump(bots, f, indent=2)
+state = {}
 
-# =========================
-# USER STATE
-# =========================
-user_state = {}
+@bot.message_handler(commands=['start'])
+def start(msg):
 
-# =========================
-# START COMMAND
-# =========================
-@bot.message_handler(commands=["start"])
-def start(message):
-
-    kb = InlineKeyboardMarkup(row_width=2)
+    kb = ReplyKeyboardMarkup(resize_keyboard=True)
 
     kb.add(
-        InlineKeyboardButton("➕ Add Bot", callback_data="add"),
-        InlineKeyboardButton("🤖 My Bots", callback_data="mybots")
+        KeyboardButton("➕ Add Bot"),
+        KeyboardButton("🤖 My Bots")
     )
-
-    text = "Ku dar botkaaga si uu u isticmaalo Verify System."
-
-    bot.send_message(message.chat.id, text, reply_markup=kb)
-
-# =========================
-# ADD BOT BUTTON
-# =========================
-@bot.callback_query_handler(func=lambda call: call.data == "add")
-def add_bot(call):
-
-    user_state[call.from_user.id] = "token"
 
     bot.send_message(
-        call.message.chat.id,
-        "Fadlan geli BOT API TOKEN"
+        msg.chat.id,
+        "Ku dar bot-kaaga verify system.",
+        reply_markup=kb
     )
 
-# =========================
-# SAVE TOKEN
-# =========================
-@bot.message_handler(func=lambda message: user_state.get(message.from_user.id) == "token")
-def save_token(message):
+@bot.message_handler(func=lambda m: m.text=="➕ Add Bot")
+def addbot(msg):
 
-    token = message.text.strip()
+    state[msg.from_user.id] = "token"
 
-    bot.send_message(message.chat.id, "Token-ka waa la hubinayaa...")
+    bot.send_message(
+        msg.chat.id,
+        "Fadlan geli API TOKEN botka"
+    )
+
+@bot.message_handler(func=lambda m: state.get(m.from_user.id)=="token")
+def gettoken(msg):
+
+    token = msg.text
 
     try:
 
+        import requests
+
         r = requests.get(
-            f"https://api.telegram.org/bot{token}/getMe",
-            timeout=15
+            f"https://api.telegram.org/bot{token}/getMe"
         ).json()
 
-        if not r["ok"]:
-            bot.send_message(message.chat.id, "Token sax ma aha.")
-            return
-
         username = r["result"]["username"]
-        bot_id = str(r["result"]["id"])
 
-        bots[bot_id] = {
-            "token": token,
-            "username": username,
-            "owner": message.from_user.id
+        bots = load_bots()
+
+        bots[token] = {
+            "username":username,
+            "owner":msg.from_user.id
         }
 
-        save()
-
-        user_state[message.from_user.id] = None
+        save_bots(bots)
 
         bot.send_message(
-            message.chat.id,
-            f"Bot waa la daray: @{username}"
+            msg.chat.id,
+            f"✅ Bot waa la daray\n@{username}"
         )
+
+        state[msg.from_user.id] = None
 
     except:
 
         bot.send_message(
-            message.chat.id,
-            "Error ayaa dhacay marka token-ka la hubinayay."
+            msg.chat.id,
+            "❌ Token sax ma aha"
         )
 
-# =========================
-# MY BOTS
-# =========================
-@bot.callback_query_handler(func=lambda call: call.data == "mybots")
-def my_bots(call):
+@bot.message_handler(func=lambda m: m.text=="🤖 My Bots")
+def mybots(msg):
 
-    text = "Bots-kaaga:\n\n"
+    bots = load_bots()
 
-    found = False
+    text="Bots-kaaga:\n\n"
 
-    for bot_id, data in bots.items():
+    for t,b in bots.items():
 
-        if data["owner"] == call.from_user.id:
+        if b["owner"]==msg.from_user.id:
 
-            text += f"@{data['username']}\n"
-            found = True
+            text+=f"@{b['username']}\n"
 
-    if not found:
-        text = "Wax bot ah wali ma gelin."
+    bot.send_message(msg.chat.id,text)
 
-    bot.send_message(call.message.chat.id, text)
-
-# =========================
-# SAFE POLLING
-# =========================
-while True:
-    try:
-        print("Bot running...")
-        bot.infinity_polling(timeout=60, long_polling_timeout=60)
-
-    except Exception as e:
-        print("Error:", e)
-        time.sleep(10)
+bot.infinity_polling()
