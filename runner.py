@@ -13,15 +13,20 @@ MONGO_URL = os.getenv("MONGO_URL")
 
 # ================= DATABASE =================
 
-client = MongoClient(MONGO_URL)
+client = MongoClient(
+    MONGO_URL,
+    maxPoolSize=300
+)
 
 db = client["verify_system"]
 
 bots_collection = db["bots"]
 users_collection = db["users"]
 downloads_collection = db["downloads"]
+codes_collection = db["codes"]
+system_collection = db["system"]
 
-# ================= HTTP SESSION (ULTRA FAST) =================
+# ================= HTTP SESSION =================
 
 session = requests.Session()
 
@@ -36,7 +41,7 @@ session.mount("https://", adapter)
 
 # ================= THREAD POOL =================
 
-download_pool = ThreadPoolExecutor(max_workers=500)
+download_pool = ThreadPoolExecutor(max_workers=700)
 
 # ================= RUNNING BOTS =================
 
@@ -51,6 +56,28 @@ def save_user(uid):
         {"$set": {"user_id": uid}},
         upsert=True
     )
+
+# ================= CHECK DOWNLOADER STATUS =================
+
+def downloader_enabled():
+
+    data = system_collection.find_one({"name": "system"})
+
+    if not data:
+        return True
+
+    return data.get("downloader_status", True)
+
+# ================= VERIFY CODE =================
+
+def verify_user(uid):
+
+    code = codes_collection.find_one({"user_id": uid})
+
+    if code:
+        return True
+
+    return False
 
 # ================= TIKTOK API =================
 
@@ -76,7 +103,7 @@ def download_tiktok(url):
 
             d = data["data"]
 
-            # PHOTO SLIDESHOW FIRST
+            # PHOTO FIRST (FIX BLACK VIDEO)
             if d.get("images"):
 
                 return {
@@ -151,6 +178,24 @@ def download_photo(url):
 def process_download(bot, chat_id, uid, url):
 
     try:
+
+        # CHECK DOWNLOADER STATUS
+        if not downloader_enabled():
+
+            bot.send_message(
+                chat_id,
+                "⛔ Downloader is currently disabled by admin"
+            )
+            return
+
+        # CHECK VERIFY
+        if not verify_user(uid):
+
+            bot.send_message(
+                chat_id,
+                "⚠️ You must verify first.\n\nGo to @Verify_owner_bot and get your code."
+            )
+            return
 
         bot.send_message(chat_id, "⏳ Downloading...")
 
@@ -231,6 +276,7 @@ def process_download(bot, chat_id, uid, url):
 
         bot.send_message(chat_id, "❌ Download error")
 
+
 # ================= START USER BOT =================
 
 def start_user_bot(token):
@@ -240,10 +286,12 @@ def start_user_bot(token):
         bot = telebot.TeleBot(
             token,
             threaded=True,
-            num_threads=100
+            num_threads=120
         )
 
         running_bots[token] = bot
+
+        # -------- START COMMAND --------
 
         @bot.message_handler(commands=["start"])
         def start(message):
@@ -253,7 +301,9 @@ def start_user_bot(token):
             save_user(uid)
 
             bot.send_message(
+
                 message.chat.id,
+
 """👋 Welcome to TikTok Downloader Bot
 
 📥 Send any TikTok link and I will download it instantly.
@@ -263,13 +313,45 @@ Features:
 • Photo slideshow download
 • Fast download
 
-Just send a TikTok link to begin.
+⚠️ Verification required before downloading.
 
-━━━━━━━━━━━━━━
-
-Create your own downloader:
-@Verify_yourbot"""
+Get your code from:
+@Verify_owner_bot"""
             )
+
+        # -------- CODE VERIFY --------
+
+        @bot.message_handler(func=lambda m: m.text and m.text.isdigit())
+        def verify_code(message):
+
+            uid = message.from_user.id
+
+            code = message.text.strip()
+
+            data = codes_collection.find_one({"code": code})
+
+            if not data:
+
+                bot.send_message(
+                    message.chat.id,
+                    "❌ Invalid code"
+                )
+                return
+
+            if data["user_id"] != uid:
+
+                bot.send_message(
+                    message.chat.id,
+                    "❌ This code is not yours"
+                )
+                return
+
+            bot.send_message(
+                message.chat.id,
+                "✅ Verification successful\n\nNow send TikTok link."
+            )
+
+        # -------- TIKTOK LINK --------
 
         @bot.message_handler(func=lambda m: m.text and "tiktok.com" in m.text)
         def tiktok(message):
@@ -277,7 +359,6 @@ Create your own downloader:
             uid = message.from_user.id
             url = message.text.strip()
 
-            # HIGH SPEED DOWNLOAD
             download_pool.submit(
                 process_download,
                 bot,
@@ -310,8 +391,6 @@ while True:
         bots = list(bots_collection.find())
 
         active_tokens = []
-
-        # ===== START / STOP BOTS =====
 
         for b in bots:
 
@@ -352,7 +431,7 @@ while True:
                     except:
                         pass
 
-        # ===== REMOVE BOT IF DELETED FROM DATABASE =====
+        # REMOVE BOTS IF DELETED
 
         for token in list(running_bots.keys()):
 
