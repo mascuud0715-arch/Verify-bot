@@ -1,50 +1,61 @@
-import json
-import time
 import telebot
+import json
+from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 
-running = {}
-
-def load_bots():
+def load_codes():
     try:
-        with open("bots.json") as f:
+        with open("codes.json") as f:
             return json.load(f)
     except:
         return {}
 
-while True:
+def start_bot(token):
 
-    bots = load_bots()
+    bot = telebot.TeleBot(token)
 
-    for token,data in bots.items():
+    verified_users = set()
 
-        if token not in running:
+    @bot.message_handler(commands=["start"])
+    def start(message):
 
-            try:
+        if message.from_user.id not in verified_users:
 
-                bot = telebot.TeleBot(token)
+            kb = InlineKeyboardMarkup()
+            kb.add(
+                InlineKeyboardButton(
+                    "VERIFY",
+                    url="https://t.me/Verifyd_bot"
+                )
+            )
 
-                @bot.message_handler(commands=['start'])
-                def start(msg):
+            bot.send_message(
+                message.chat.id,
+                "❌ You Can't Use this Bot before verify",
+                reply_markup=kb
+            )
 
-                    bot.send_message(
-                        msg.chat.id,
-                        "Welcome to verify system"
-                    )
+        else:
+            bot.send_message(
+                message.chat.id,
+                "✅ Welcome! You are verified."
+            )
 
-                import threading
+    @bot.message_handler(func=lambda m: True)
+    def verify_code(message):
 
-                t = threading.Thread(
-                    target=bot.infinity_polling
+        codes = load_codes()
+
+        user_id = str(message.from_user.id)
+
+        if user_id in codes:
+
+            if message.text == str(codes[user_id]):
+
+                verified_users.add(message.from_user.id)
+
+                bot.send_message(
+                    message.chat.id,
+                    "✅ Verified Successfully!"
                 )
 
-                t.start()
-
-                running[token] = True
-
-                print("Bot started",data["username"])
-
-            except:
-
-                pass
-
-    time.sleep(10)
+    bot.infinity_polling()
