@@ -101,25 +101,25 @@ def send_force_join(chat_id):
     # hubi verify system
     system = system_collection.find_one({"system": "verify"})
 
-    if not system or system.get("active") == False:
-        return False   # force join disabled
+    if not system or not system.get("active"):
+        return False
 
-    # qaado channels active ah
-    channels = channels_collection.find({"active": True})
+    # qaado channels active
+    channels = list(channels_collection.find({"active": True}))
 
-    channel_list = []
-
-    for ch in channels:
-        channel_list.append(ch["username"])
-
-    if not channel_list:
+    if len(channels) == 0:
         return False
 
     kb = InlineKeyboardMarkup()
 
-    for ch in channel_list:
+    for ch in channels:
 
-        link = f"https://t.me/{ch.replace('@','')}"
+        username = ch.get("username")
+
+        if not username:
+            continue
+
+        link = f"https://t.me/{username.replace('@','')}"
 
         kb.add(
             InlineKeyboardButton(
