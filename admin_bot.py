@@ -8,9 +8,11 @@ ADMIN_ID = int(os.getenv("ADMIN_ID"))
 
 bot = telebot.TeleBot(TOKEN)
 
-broadcast_mode = False
-button_mode = False
-broadcast_text = ""
+broadcast_mode=False
+button_mode=False
+broadcast_text=""
+button_text=""
+button_link=""
 
 
 def load_bots():
@@ -44,7 +46,7 @@ def save_channels(data):
 
 def admin_menu():
 
-    kb = ReplyKeyboardMarkup(resize_keyboard=True)
+    kb=ReplyKeyboardMarkup(resize_keyboard=True)
 
     kb.add(
         KeyboardButton("📊 Stats"),
@@ -66,7 +68,7 @@ def admin_menu():
 @bot.message_handler(commands=["start"])
 def start(message):
 
-    if message.from_user.id != ADMIN_ID:
+    if message.from_user.id!=ADMIN_ID:
         bot.send_message(message.chat.id,"❌ Not allowed")
         return
 
@@ -77,12 +79,13 @@ def start(message):
     )
 
 
-# STATS
-@bot.message_handler(func=lambda m: m.text == "📊 Stats")
+# ================= STATS =================
+
+@bot.message_handler(func=lambda m:m.text=="📊 Stats")
 def stats(message):
 
-    bots = load_bots()
-    users = load_users()
+    bots=load_bots()
+    users=load_users()
 
     bot.send_message(
         message.chat.id,
@@ -95,30 +98,76 @@ def stats(message):
     )
 
 
-# BOTS LIST
-@bot.message_handler(func=lambda m: m.text == "🤖 Bots")
-def bots_list(message):
+# ================= BOTS =================
 
-    bots = load_bots()
+@bot.message_handler(func=lambda m:m.text=="🤖 Bots")
+def bots_panel(message):
 
-    text="🤖 Bots List\n\n"
+    kb=InlineKeyboardMarkup()
+
+    kb.add(
+        InlineKeyboardButton("👤 Usernames",callback_data="bot_usernames")
+    )
+
+    kb.add(
+        InlineKeyboardButton("🔑 See API",callback_data="bot_api")
+    )
+
+    bot.send_message(
+        message.chat.id,
+        "🤖 Bots Panel",
+        reply_markup=kb
+    )
+
+
+@bot.callback_query_handler(func=lambda call:call.data=="bot_usernames")
+def show_usernames(call):
+
+    bots=load_bots()
+
+    text="🤖 Bots Usernames\n\n"
+
+    i=1
 
     for b in bots:
-        text+=b["token"]+"\n\n"
+        text+=f"{i}: {b.get('username','Unknown')}\n"
+        i+=1
 
-    if len(bots)==0:
-        text="No bots added"
+    bot.edit_message_text(
+        text,
+        call.message.chat.id,
+        call.message.message_id
+    )
 
-    bot.send_message(message.chat.id,text)
+
+@bot.callback_query_handler(func=lambda call:call.data=="bot_api")
+def show_api(call):
+
+    bots=load_bots()
+
+    text="🔑 Bots API Tokens\n\n"
+
+    i=1
+
+    for b in bots:
+        text+=f"{i}: {b['token']}\n\n"
+        i+=1
+
+    bot.edit_message_text(
+        text,
+        call.message.chat.id,
+        call.message.message_id
+    )
 
 
-# BROADCAST
-@bot.message_handler(func=lambda m: m.text == "📢 Broadcast")
+# ================= BROADCAST =================
+
+@bot.message_handler(func=lambda m:m.text=="📢 Broadcast")
 def broadcast(message):
 
     global broadcast_mode
 
-    broadcast_mode = True
+    broadcast_mode=True
 
     bot.send_message(
         message.chat.id,
@@ -126,13 +175,128 @@ def broadcast(message):
     )
 
 
-# ADD CHANNEL
-@bot.message_handler(func=lambda m: m.text == "➕ Add Channel")
+@bot.message_handler(func=lambda m:True)
+def broadcast_steps(message):
+
+    global broadcast_mode,button_mode,broadcast_text,button_text,button_link
+
+    if message.from_user.id!=ADMIN_ID:
+        return
+
+
+    # Step 1 receive message
+    if broadcast_mode:
+
+        broadcast_text=message.text
+        broadcast_mode=False
+        button_mode=True
+
+        kb=ReplyKeyboardMarkup(resize_keyboard=True)
+        kb.add("Add Button","No Button")
+
+        bot.send_message(
+            message.chat.id,
+            "Do you want to add button?",
+            reply_markup=kb
+        )
+
+        return
+
+
+    # Step 2 choose button
+    if button_mode and message.text=="Add Button":
+
+        bot.send_message(
+            message.chat.id,
+            "Send button text"
+        )
+
+        bot.register_next_step_handler(message,get_button_text)
+        return
+
+
+    if button_mode and message.text=="No Button":
+
+        send_broadcast(message.chat.id,None)
+
+        button_mode=False
+
+        bot.send_message(
+            message.chat.id,
+            "✅ Broadcast Sent",
+            reply_markup=admin_menu()
+        )
+
+
+def get_button_text(message):
+
+    global button_text
+
+    button_text=message.text
+
+    bot.send_message(
+        message.chat.id,
+        "Send button link"
+    )
+
+    bot.register_next_step_handler(message,get_button_link)
+
+
+def get_button_link(message):
+
+    global button_link
+
+    button_link=message.text
+
+    kb=InlineKeyboardMarkup()
+
+    kb.add(
+        InlineKeyboardButton(button_text,url=button_link)
+    )
+
+    send_broadcast(message.chat.id,kb)
+
+    bot.send_message(
+        message.chat.id,
+        "✅ Broadcast Sent",
+        reply_markup=admin_menu()
+    )
+
+
+def send_broadcast(chat_id,kb):
+
+    users=load_users()
+
+    sent=0
+
+    for u in users:
+
+        try:
+
+            if kb:
+                bot.send_message(u,broadcast_text,reply_markup=kb)
+            else:
+                bot.send_message(u,broadcast_text)
+
+            sent+=1
+
+        except:
+            pass
+
+    bot.send_message(
+        chat_id,
+        f"📢 Broadcast delivered to {sent} users"
+    )
+
+
+# ================= ADD CHANNEL =================
+
+@bot.message_handler(func=lambda m:m.text=="➕ Add Channel")
 def add_channel(message):
 
     bot.send_message(
         message.chat.id,
-        "Send channel username\nExample:\n@mychannel"
+        "Send channel username\nExample:\n@channel"
     )
 
     bot.register_next_step_handler(message,save_channel)
@@ -140,9 +304,9 @@ def add_channel(message):
 
 def save_channel(message):
 
-    channel = message.text.strip()
+    channel=message.text.strip()
 
-    channels = load_channels()
+    channels=load_channels()
 
     channels.append(channel)
 
@@ -154,11 +318,12 @@ def save_channel(message):
     )
 
 
-# LIST CHANNELS
-@bot.message_handler(func=lambda m: m.text == "📡 Channels")
+# ================= CHANNELS =================
+
+@bot.message_handler(func=lambda m:m.text=="📡 Channels")
 def channels_list(message):
 
-    channels = load_channels()
+    channels=load_channels()
 
     text="📡 Force Join Channels\n\n"
 
@@ -169,49 +334,6 @@ def channels_list(message):
         text="No channels added"
 
     bot.send_message(message.chat.id,text)
-
-
-# SEND BROADCAST
-@bot.message_handler(func=lambda m: True)
-def send_broadcast(message):
-
-    global broadcast_mode
-
-    if message.from_user.id != ADMIN_ID:
-        return
-
-    if broadcast_mode:
-
-        users = load_users()
-
-        sent = 0
-
-        kb = InlineKeyboardMarkup()
-        kb.add(
-            InlineKeyboardButton(
-                "🌐 Visit",
-                url="https://example.com"
-            )
-        )
-
-        for u in users:
-
-            try:
-                bot.send_message(
-                    u,
-                    message.text,
-                    reply_markup=kb
-                )
-                sent+=1
-            except:
-                pass
-
-        bot.send_message(
-            message.chat.id,
-            f"✅ Broadcast sent to {sent} users"
-        )
-
-        broadcast_mode = False
 
 
 print("Admin Bot Running...")
