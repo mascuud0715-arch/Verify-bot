@@ -96,11 +96,28 @@ def get_channels():
 
 # ================= FORCE JOIN =================
 
-def send_force_join(chat_id, channels):
+def send_force_join(chat_id):
+
+    # hubi verify system
+    system = system_collection.find_one({"system": "verify"})
+
+    if not system or system.get("active") == False:
+        return False   # force join disabled
+
+    # qaado channels active ah
+    channels = channels_collection.find({"active": True})
+
+    channel_list = []
+
+    for ch in channels:
+        channel_list.append(ch["username"])
+
+    if not channel_list:
+        return False
 
     kb = InlineKeyboardMarkup()
 
-    for ch in channels:
+    for ch in channel_list:
 
         link = f"https://t.me/{ch.replace('@','')}"
 
@@ -123,6 +140,8 @@ def send_force_join(chat_id, channels):
         "⚠️ Please join all channels to continue",
         reply_markup=kb
     )
+
+    return True
 
 # ================= START =================
 
