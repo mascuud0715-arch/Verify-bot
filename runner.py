@@ -64,9 +64,9 @@ def downloader_enabled():
     data = system_collection.find_one({"name": "system"})
 
     if not data:
-        return False
+        return True   # default open
 
-    return data.get("downloader_status", False)
+    return data.get("downloader_status", True)
 
 # ================= VERIFY USER =================
 
