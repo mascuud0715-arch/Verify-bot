@@ -74,20 +74,31 @@ def verify_join(user_id):
 
 def send_force_join(bot, chat_id):
 
-    kb = InlineKeyboardMarkup()
+    # qaado channels active ah
+    channels = list(channels_collection.find({"active": True}))
 
-    channels = channels_collection.find({"active":True})
+    # haddii channels jirin → ha dirin force join
+    if len(channels) == 0:
+        return False
+
+    kb = InlineKeyboardMarkup()
 
     for ch in channels:
 
         link = f"https://t.me/{ch['username'].replace('@','')}"
 
         kb.add(
-            InlineKeyboardButton("JOIN CHANNEL", url=link)
+            InlineKeyboardButton(
+                "JOIN CHANNEL",
+                url=link
+            )
         )
 
     kb.add(
-        InlineKeyboardButton("CONFIRM", callback_data="confirm_join")
+        InlineKeyboardButton(
+            "CONFIRM",
+            callback_data="confirm_join"
+        )
     )
 
     bot.send_message(
@@ -95,6 +106,8 @@ def send_force_join(bot, chat_id):
         "⚠️ Please join all channels to continue",
         reply_markup=kb
     )
+
+    return True
 
 # -------- TIKTOK DOWNLOAD --------
 
