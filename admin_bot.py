@@ -380,9 +380,9 @@ def close_channels(message):
     )
 
     system_collection.update_one(
-        {"system": "verify"},
-        {"$set": {"active": False}},
-        upsert=True
+    {"name": "system"},
+    {"$set": {"bots_status": False}},
+    upsert=True
     )
 
     bot.send_message(
@@ -418,9 +418,9 @@ def close_bots(message):
 def open_bots(message):
 
     system_collection.update_one(
-        {"system": "bots"},
-        {"$set": {"active": True}},
-        upsert=True
+    {"name": "system"},
+    {"$set": {"bots_status": True}},
+    upsert=True
     )
 
     bot.send_message(
@@ -437,9 +437,9 @@ def open_bots(message):
 def verify_on(message):
 
     system_collection.update_one(
-        {"system": "verify"},
-        {"$set": {"active": True}},
-        upsert=True
+    {"name": "system"},
+    {"$set": {"verify_status": True}},
+    upsert=True
     )
 
     bot.send_message(
@@ -456,9 +456,9 @@ def verify_on(message):
 def verify_off(message):
 
     system_collection.update_one(
-        {"system": "verify"},
-        {"$set": {"active": False}},
-        upsert=True
+    {"name": "system"},
+    {"$set": {"verify_status": False}},
+    upsert=True
     )
 
     bot.send_message(
