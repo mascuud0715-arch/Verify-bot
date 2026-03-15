@@ -10,6 +10,7 @@ from flask import Flask, request, jsonify
 
 TOKEN = os.getenv("MAIN_BOT_TOKEN")
 MONGO_URL = os.getenv("MONGO_URL")
+ADMIN_ID = 7983838654
 
 bot = telebot.TeleBot(TOKEN)
 
