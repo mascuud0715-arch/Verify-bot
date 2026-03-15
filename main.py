@@ -1,10 +1,10 @@
 import telebot
 import os
 import time
+import threading
 from telebot.types import *
 from pymongo import MongoClient
 from flask import Flask, request, jsonify
-import threading
 
 # ================= ENV =================
 
@@ -16,14 +16,13 @@ bot = telebot.TeleBot(TOKEN)
 # ================= DATABASE =================
 
 client = MongoClient(MONGO_URL)
-
 db = client["verify_system"]
 
 bots_collection = db["bots"]
 users_collection = db["users"]
 channels_collection = db["channels"]
 
-# ================= FLASK APP =================
+# ================= FLASK =================
 
 app = Flask(__name__)
 
@@ -33,10 +32,13 @@ def main_menu():
 
     kb = ReplyKeyboardMarkup(resize_keyboard=True)
 
-    kb.add(KeyboardButton("➕ Add Bot"))
-    kb.add(KeyboardButton("🤖 My Bots"))
+    kb.add(
+        KeyboardButton("➕ Add Bot"),
+        KeyboardButton("🤖 My Bots")
+    )
 
     return kb
+
 
 # ================= SAVE USER =================
 
@@ -44,20 +46,23 @@ def save_user(user):
 
     users_collection.update_one(
         {"user_id": user.id},
-        {"$set":{
-            "user_id": user.id,
-            "username": user.username
-        }},
+        {
+            "$set":{
+                "user_id": user.id,
+                "username": user.username
+            }
+        },
         upsert=True
     )
+
 
 # ================= CHECK CHANNELS =================
 
 def check_channels(user_id):
 
-    channels = channels_collection.find({"active": True})
-
     not_joined = []
+
+    channels = channels_collection.find({"active": True})
 
     for ch in channels:
 
@@ -69,14 +74,17 @@ def check_channels(user_id):
             )
 
             if member.status not in ["member","administrator","creator"]:
+
                 not_joined.append(ch["username"])
 
         except:
+
             not_joined.append(ch["username"])
 
     return not_joined
 
-# ================= FORCE JOIN MESSAGE =================
+
+# ================= FORCE JOIN =================
 
 def send_force_join(chat_id, channels):
 
@@ -105,6 +113,7 @@ def send_force_join(chat_id, channels):
         "⚠️ Please join all channels to continue",
         reply_markup=kb
     )
+
 
 # ================= START =================
 
@@ -141,9 +150,10 @@ Steps:
         reply_markup=main_menu()
     )
 
+
 # ================= CONFIRM JOIN =================
 
-@bot.callback_query_handler(func=lambda c:c.data=="confirm_join")
+@bot.callback_query_handler(func=lambda call: call.data == "confirm_join")
 def confirm_join(call):
 
     user_id = call.from_user.id
@@ -157,7 +167,6 @@ def confirm_join(call):
             "❌ Join all channels first",
             show_alert=True
         )
-
         return
 
     bot.answer_callback_query(
@@ -171,17 +180,19 @@ def confirm_join(call):
         reply_markup=main_menu()
     )
 
+
 # ================= ADD BOT =================
 
-@bot.message_handler(func=lambda m:m.text=="➕ Add Bot")
+@bot.message_handler(func=lambda m: m.text == "➕ Add Bot")
 def add_bot(message):
 
-    bot.send_message(
+    msg = bot.send_message(
         message.chat.id,
         "Send your bot token from @BotFather"
     )
 
-    bot.register_next_step_handler(message, save_bot)
+    bot.register_next_step_handler(msg, save_bot)
+
 
 # ================= SAVE BOT =================
 
@@ -197,11 +208,13 @@ def save_bot(message):
 
         bots_collection.update_one(
             {"token": token},
-            {"$set":{
-                "token": token,
-                "username": info.username,
-                "owner": message.from_user.id
-            }},
+            {
+                "$set":{
+                    "token": token,
+                    "username": info.username,
+                    "owner": message.from_user.id
+                }
+            },
             upsert=True
         )
 
@@ -217,9 +230,10 @@ def save_bot(message):
             "❌ Invalid bot token"
         )
 
+
 # ================= MY BOTS =================
 
-@bot.message_handler(func=lambda m:m.text=="🤖 My Bots")
+@bot.message_handler(func=lambda m: m.text == "🤖 My Bots")
 def my_bots(message):
 
     bots = bots_collection.find({"owner": message.from_user.id})
@@ -234,12 +248,11 @@ def my_bots(message):
         found = True
 
     if not found:
+
         text = "❌ No bots yet"
 
-    bot.send_message(
-        message.chat.id,
-        text
-    )
+    bot.send_message(message.chat.id, text)
+
 
 # ================= VERIFY API =================
 
@@ -249,22 +262,24 @@ def verify():
     user_id = request.args.get("user_id")
 
     if not user_id:
-        return jsonify({"status":"error"})
+
+        return jsonify({"status": "error"})
 
     not_joined = check_channels(user_id)
 
     if not not_joined:
 
         return jsonify({
-            "status":"joined"
+            "status": "joined"
         })
 
     else:
 
         return jsonify({
-            "status":"not_joined",
-            "channels":not_joined
+            "status": "not_joined",
+            "channels": not_joined
         })
+
 
 # ================= RUN BOT =================
 
@@ -273,14 +288,16 @@ def run_bot():
     while True:
 
         try:
+
             bot.infinity_polling(skip_pending=True)
 
         except Exception as e:
 
-            print(e)
+            print("BOT ERROR:", e)
             time.sleep(5)
 
-# ================= START SYSTEM =================
+
+# ================= START =================
 
 if __name__ == "__main__":
 
@@ -289,7 +306,9 @@ if __name__ == "__main__":
 
     threading.Thread(target=run_bot).start()
 
+    port = int(os.environ.get("PORT", 5000))
+
     app.run(
         host="0.0.0.0",
-        port=5000
+        port=port
     )
