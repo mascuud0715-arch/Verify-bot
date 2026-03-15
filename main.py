@@ -50,12 +50,11 @@ def my_bots(message):
 
     text = "🤖 Your Bots:\n\n"
 
-    found = False
-
     for b in bots:
         if b["owner"] == message.from_user.id:
-            text += f"{b['token']}\n\n"
-            found = True
+
+            username = get_bot_username(b["token"])
+            text += f"{username}\n"
 
     if not found:
         text = "❌ You don't have bots added."
