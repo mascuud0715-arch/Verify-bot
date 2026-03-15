@@ -1,231 +1,91 @@
 import telebot
-import os
 import requests
-from telebot.types import ReplyKeyboardMarkup, InlineKeyboardMarkup, InlineKeyboardButton
+import os
+from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 from pymongo import MongoClient
 
-# -------- ENV --------
+# ================= ENV =================
 
-TOKEN = os.getenv("MAIN_BOT_TOKEN")
+TOKEN = os.getenv("BOT_TOKEN")
 MONGO_URL = os.getenv("MONGO_URL")
 
 bot = telebot.TeleBot(TOKEN)
 
-# -------- DATABASE --------
+# ================= DATABASE =================
 
 client = MongoClient(MONGO_URL)
 
 db = client["verify_system"]
 
-bots_collection = db["bots"]
 users_collection = db["users"]
 channels_collection = db["channels"]
+system_collection = db["system"]
+downloads_collection = db["downloads"]
 
-# -------- STATE --------
+# ================= SAVE USER =================
 
-user_state = {}
-
-# -------- SAVE USER --------
-
-def save_user(uid):
+def save_user(user):
 
     users_collection.update_one(
-        {"user_id": uid},
-        {"$set": {"user_id": uid}},
+        {"user_id":user.id},
+        {"$set":{
+            "user_id":user.id,
+            "username":user.username
+        }},
         upsert=True
     )
 
-# -------- GET BOT USERNAME --------
+# ================= CHECK SYSTEM =================
 
-def get_bot_username(token):
+def bots_active():
 
-    try:
+    data = system_collection.find_one({"system":"bots"})
 
-        r = requests.get(
-            f"https://api.telegram.org/bot{token}/getMe"
-        ).json()
+    if not data:
+        return True
 
-        if r["ok"]:
-            return "@" + r["result"]["username"]
+    return data.get("active",True)
 
-    except:
-        pass
+# ================= FORCE JOIN CHECK =================
 
-    return None
+def check_force_join(user_id):
 
-# -------- GET CHANNELS --------
+    channels = channels_collection.find({"active":True})
 
-def get_channels():
-
-    channels = channels_collection.find({"active": True})
-
-    result = []
-
-    for c in channels:
-        result.append(c["username"])
-
-    return result
-
-# -------- CHECK JOIN --------
-
-def check_join(user_id):
-
-    channels = get_channels()
+    not_joined = []
 
     for ch in channels:
 
         try:
 
-            member = bot.get_chat_member(ch, user_id)
+            member = bot.get_chat_member(ch["username"], user_id)
 
-            if member.status in ["left","kicked"]:
-                return False
+            if member.status not in ["member","administrator","creator"]:
+
+                not_joined.append(ch["username"])
 
         except:
-            return False
 
-    return True
+            not_joined.append(ch["username"])
 
-# -------- START --------
+    return not_joined
 
-@bot.message_handler(commands=["start"])
-def start(message):
+# ================= FORCE JOIN MESSAGE =================
 
-    uid = message.from_user.id
-
-    save_user(uid)
-
-    kb = ReplyKeyboardMarkup(resize_keyboard=True)
-
-    kb.add("➕ Add Bot")
-    kb.add("🤖 My Bots")
-
-    bot.send_message(
-    message.chat.id,
-    """
-🤖 Welcome to Verify Bot System
-
-This system allows you to connect your own Telegram bot and turn it into a powerful TikTok downloader.
-
-📥 What your bot will do:
-• Download TikTok videos
-• Download TikTok photo slides
-• Work automatically for your users
-• Show download credits via your bot
-
-⚙️ How to setup your bot:
-
-1️⃣ Create a bot using @BotFather  
-2️⃣ Copy the Bot Token  
-3️⃣ Click ➕ Add Bot and send the token  
-
-🚀 After adding your bot, it will start automatically and become a TikTok downloader.
-
-Choose an option below to continue.
-""",
-    reply_markup=kb
-    )
-
-# -------- ADD BOT --------
-
-@bot.message_handler(func=lambda m: m.text == "➕ Add Bot")
-def add_bot(message):
-
-    user_state[message.from_user.id] = "token"
-
-    bot.send_message(
-        message.chat.id,
-        "📩 Send your Bot Token"
-    )
-
-# -------- MY BOTS --------
-
-@bot.message_handler(func=lambda m: m.text == "🤖 My Bots")
-def my_bots(message):
-
-    uid = message.from_user.id
-
-    bots = bots_collection.find({"owner": uid})
-
-    text = "🤖 Your Bots\n\n"
-
-    found = False
-
-    for b in bots:
-
-        text += f"{b['username']}\n"
-        found = True
-
-    if not found:
-        text = "❌ You don't have bots added."
-
-    bot.send_message(message.chat.id,text)
-
-# -------- RECEIVE TOKEN --------
-
-@bot.message_handler(func=lambda m: m.from_user.id in user_state)
-def receive_token(message):
-
-    uid = message.from_user.id
-
-    token = message.text.strip()
-
-    username = get_bot_username(token)
-
-    if not username:
-
-        bot.send_message(
-            message.chat.id,
-            "❌ Invalid Bot Token"
-        )
-        return
-
-    if bots_collection.find_one({"token": token}):
-
-        bot.send_message(
-            message.chat.id,
-            "⚠️ Bot already added"
-        )
-        return
-
-    bots_collection.insert_one({
-
-        "owner": uid,
-        "token": token,
-        "username": username
-
-    })
-
-    del user_state[uid]
-
-    bot.send_message(
-        message.chat.id,
-        f"✅ Bot Added Successfully\n\n{username}\n\nBot will start automatically."
-    )
-
-# -------- FORCE JOIN --------
-
-def force_join(chat_id,user_id):
-
-    if check_join(user_id):
-        return True
-
-    channels = get_channels()
+def send_force_join(chat_id, channels):
 
     kb = InlineKeyboardMarkup()
 
-    kb.add(
-        InlineKeyboardButton(
-            "JOIN",
-            url=f"https://t.me/{channels[0].replace('@','')}"
+    for ch in channels:
+
+        link = f"https://t.me/{ch.replace('@','')}"
+
+        kb.add(
+            InlineKeyboardButton("JOIN", url=link)
         )
-    )
 
     kb.add(
-        InlineKeyboardButton(
-            "CONFIRM",
-            callback_data="confirm_join"
-        )
+        InlineKeyboardButton("CONFIRM", callback_data="confirm_join")
     )
 
     bot.send_message(
@@ -234,31 +94,70 @@ def force_join(chat_id,user_id):
         reply_markup=kb
     )
 
-    return False
+# ================= START =================
 
-# -------- CONFIRM JOIN --------
+@bot.message_handler(commands=["start"])
+def start(message):
 
-@bot.callback_query_handler(func=lambda call: call.data=="confirm_join")
-def confirm_join(call):
+    if not bots_active():
 
-    uid = call.from_user.id
-
-    if not check_join(uid):
-
-        bot.answer_callback_query(
-            call.id,
-            "❌ Join channel first",
-            show_alert=True
+        bot.send_message(
+            message.chat.id,
+            "🚫 Bot is temporarily disabled"
         )
         return
 
+    save_user(message.from_user)
+
+    not_joined = check_force_join(message.from_user.id)
+
+    if not_joined:
+
+        send_force_join(message.chat.id, not_joined)
+        return
+
+    bot.send_message(
+        message.chat.id,
+        f"""
+🤖 Welcome To Video Downloader
+
+Send a video link from:
+
+• TikTok
+• Instagram
+• Facebook
+• Pinterest
+
+The bot will download it instantly.
+
+Powered by @Verify_yourbot
+"""
+    )
+
+# ================= CONFIRM JOIN =================
+
+@bot.callback_query_handler(func=lambda call:call.data=="confirm_join")
+def confirm_join(call):
+
+    not_joined = check_force_join(call.from_user.id)
+
+    if not_joined:
+
+        bot.answer_callback_query(
+            call.id,
+            "❌ You must join all channels",
+            show_alert=True
+        )
+
+        return
+
     bot.edit_message_text(
-        "✅ Verified\n\nSend TikTok link",
+        "✅ Verification successful\n\nSend a video link to download",
         call.message.chat.id,
         call.message.message_id
     )
 
-# -------- TIKTOK DOWNLOAD --------
+# ================= TIKTOK DOWNLOADER =================
 
 def download_tiktok(url):
 
@@ -268,97 +167,130 @@ def download_tiktok(url):
 
         r = requests.get(api).json()
 
-        if r["code"] != 0:
-            return None
+        if r["code"] == 0:
 
-        data = r["data"]
+            data = r["data"]
 
-        # VIDEO
-        if data.get("play"):
+            video = data.get("play")
+            images = data.get("images")
 
-            return {
-                "type": "video",
-                "media": data["play"]
-            }
-
-        # PHOTO SLIDES
-        if data.get("images"):
-
-            return {
-                "type": "photo",
-                "media": data["images"]
-            }
+            return video, images
 
     except:
         pass
 
-    return None
+    return None, None
 
-# -------- HANDLE LINKS --------
-@bot.message_handler(func=lambda m: "tiktok.com" in m.text)
-def handle_tiktok(message):
+# ================= HANDLE LINKS =================
 
-    uid = message.from_user.id
-    url = message.text
+@bot.message_handler(func=lambda m: True)
+def handle_links(message):
 
-    bot.send_message(
-        message.chat.id,
-        "⏳ Downloading..."
-    )
+    if not bots_active():
+        bot.send_message(
+            message.chat.id,
+            "🚫 Bot is temporarily disabled"
+        )
+        return
 
-    result = download_tiktok(url)
+    if not message.text:
+        return
 
-    if not result:
+    text = message.text
+
+    # -------- CHECK FORCE JOIN --------
+
+    not_joined = check_force_join(message.from_user.id)
+
+    if not_joined:
+
+        send_force_join(message.chat.id, not_joined)
+        return
+
+    # -------- TIKTOK LINK --------
+
+    if "tiktok.com" in text or "vt.tiktok.com" in text:
+
+        bot.send_message(
+            message.chat.id,
+            "⏳ Downloading..."
+        )
+
+        video, images = download_tiktok(text)
+
+        # -------- PHOTO SLIDESHOW --------
+
+        if images:
+
+            for img in images:
+
+                try:
+
+                    bot.send_photo(
+                        message.chat.id,
+                        img
+                    )
+
+                except:
+                    pass
+
+            downloads_collection.insert_one({
+                "user": message.from_user.id,
+                "type": "photo",
+                "time": int(time.time())
+            })
+
+            bot.send_message(
+                message.chat.id,
+                f"Via @{bot.get_me().username}"
+            )
+
+            bot.send_message(
+                message.chat.id,
+                "Created:@Verify_yourbot"
+            )
+
+            return
+
+        # -------- VIDEO --------
+
+        if video:
+
+            try:
+
+                bot.send_video(
+                    message.chat.id,
+                    video,
+                    caption=f"Via @{bot.get_me().username}"
+                )
+
+                downloads_collection.insert_one({
+                    "user": message.from_user.id,
+                    "type": "tiktok",
+                    "time": int(time.time())
+                })
+
+                bot.send_message(
+                    message.chat.id,
+                    "Created:@Verify_yourbot"
+                )
+
+            except:
+
+                bot.send_message(
+                    message.chat.id,
+                    "❌ Failed to send video"
+                )
+
+            return
 
         bot.send_message(
             message.chat.id,
             "❌ Download failed"
         )
 
-        return
+# ================= BOT RUN =================
 
-
-    bot_username = bot.get_me().username
-
-
-    # VIDEO
-    if result["type"] == "video":
-
-        bot.send_video(
-            message.chat.id,
-            result["media"],
-            caption=f"Via @{bot_username}"
-        )
-
-        downloads_collection.insert_one({
-            "type":"tiktok_video"
-        })
-
-
-    # PHOTOS
-    elif result["type"] == "photo":
-
-        for img in result["media"]:
-
-            bot.send_photo(
-                message.chat.id,
-                img,
-                caption=f"Via @{bot_username}"
-            )
-
-        downloads_collection.insert_one({
-            "type":"photo"
-        })
-
-
-    bot.send_message(
-        message.chat.id,
-        "Created: @Verify_yourbot"
-        )
-
-
-# -------- RUN --------
-
-print("Main Bot Running...")
+print("🚀 Downloader Bot Running...")
 
 bot.infinity_polling(skip_pending=True)
