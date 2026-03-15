@@ -25,17 +25,11 @@ def save_users(users):
 def start(msg):
 
     kb = InlineKeyboardMarkup()
-
-    kb.add(
-        InlineKeyboardButton(
-            "✅ Verify",
-            callback_data="verify"
-        )
-    )
+    kb.add(InlineKeyboardButton("✅ Verify", callback_data="verify"))
 
     bot.send_message(
         msg.chat.id,
-        "Ku dhufo Verify si aad u dhamaystirto verification.",
+        "Ku dhufo Verify si aad u verify garayso.",
         reply_markup=kb
     )
 
@@ -50,11 +44,11 @@ def callbacks(call):
 
         bot.send_message(
             call.message.chat.id,
-            f"Dir code-kan si aad u verify garayso:\n\n{code}"
+            f"Dir code-kan:\n\n{code}"
         )
 
 @bot.message_handler(func=lambda m: True)
-def check_code(msg):
+def check(msg):
 
     if msg.from_user.id in codes:
 
@@ -66,18 +60,14 @@ def check_code(msg):
                 users.append(msg.from_user.id)
                 save_users(users)
 
-            bot.send_message(
-                msg.chat.id,
-                "✅ Verification waa guulaystay."
-            )
+            bot.send_message(msg.chat.id,"✅ Waad verify garaysay")
 
             del codes[msg.from_user.id]
 
         else:
 
-            bot.send_message(
-                msg.chat.id,
-                "❌ Code khaldan."
-            )
+            bot.send_message(msg.chat.id,"❌ Code khaldan")
 
-          bot.infinity_polling()
+print("Verify bot running...")
+
+bot.infinity_polling()
