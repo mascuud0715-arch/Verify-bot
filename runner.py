@@ -64,7 +64,7 @@ def downloader_enabled():
     data = system_collection.find_one({"name": "system"})
 
     if not data:
-        return True   # default open
+        return True
 
     return data.get("downloader_status", True)
 
@@ -77,7 +77,6 @@ def verify_user(uid):
     if not data:
         return False
 
-    # CHECK EXPIRE
     if data.get("expire", 0) < time.time():
 
         codes_collection.delete_one({"user_id": uid})
@@ -184,7 +183,6 @@ def download_photo(url):
 
 def process_download(bot, chat_id, uid, url):
 
-    # CHECK ADMIN STATUS
     if not downloader_enabled():
 
         bot.send_message(
@@ -214,7 +212,8 @@ def process_download(bot, chat_id, uid, url):
 
         bot_username = bot.get_me().username
 
-        # VIDEO
+        # ================= VIDEO =================
+
         if result["type"] == "video":
 
             path = download_video(result["media"])
@@ -234,19 +233,19 @@ def process_download(bot, chat_id, uid, url):
                 )
 
             bot.send_message(
-    chat_id,
-    "Created: @Verify_yourbot"
+                chat_id,
+                "Created: @Verify_yourbot"
             )
 
             os.remove(path)
-            )
 
             downloads_collection.insert_one({
                 "type": "video",
                 "user": uid
-              )
+            })
 
-        # PHOTO SLIDESHOW
+        # ================= PHOTO =================
+
         elif result["type"] == "photo":
 
             for img in result["media"]:
@@ -264,6 +263,11 @@ def process_download(bot, chat_id, uid, url):
                     )
 
                 os.remove(path)
+
+            bot.send_message(
+                chat_id,
+                "Created: @Verify_yourbot"
+            )
 
             downloads_collection.insert_one({
                 "type": "photo",
@@ -312,10 +316,12 @@ Features:
 • Photo slideshow download
 • Fast download
 
-⚠️ Verification required before downloading.
+Just send a TikTok link to begin.
 
-Get your code from:
-@Verify_owner_bot"""
+━━━━━━━━━━━━━━
+
+Create your own downloader:
+@Verify_yourbot"""
             )
 
         # -------- CODE VERIFY --------
