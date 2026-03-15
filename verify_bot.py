@@ -1,78 +1,225 @@
 import telebot
 import os
-import random
-import json
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
+from pymongo import MongoClient
 
-TOKEN = os.getenv("VERIFY_BOT_TOKEN")
+# ---------------- CONFIG ----------------
+
+TOKEN = os.getenv("BOT_TOKEN")
+MONGO_URL = os.getenv("MONGO_URL")
 
 bot = telebot.TeleBot(TOKEN)
 
+# ---------------- DATABASE ----------------
 
-def load_codes():
-    try:
-        with open("codes.json") as f:
-            return json.load(f)
-    except:
-        return {}
+client = MongoClient(MONGO_URL)
+
+db = client["verify_system"]
+
+users_collection = db["users"]
+channels_collection = db["channels"]
+codes_collection = db["codes"]
+
+# ---------------- SAVE USER ----------------
+
+def save_user(user_id):
+
+    if users_collection.find_one({"user_id": user_id}):
+
+        return
+
+    users_collection.insert_one(
+        {
+            "user_id": user_id
+        }
+    )
 
 
-def save_codes(data):
-    with open("codes.json", "w") as f:
-        json.dump(data, f)
+# ---------------- GET CHANNELS ----------------
 
+def get_channels():
+
+    channels = channels_collection.find({"active": True})
+
+    result = []
+
+    for c in channels:
+
+        result.append(c["username"])
+
+    return result
+
+
+# ---------------- CHECK JOIN ----------------
+
+def check_join(user_id):
+
+    channels = get_channels()
+
+    not_joined = []
+
+    for ch in channels:
+
+        try:
+
+            member = bot.get_chat_member(ch, user_id)
+
+            if member.status in ["left", "kicked"]:
+
+                not_joined.append(ch)
+
+        except:
+
+            not_joined.append(ch)
+
+    return not_joined
+
+
+# ---------------- START ----------------
 
 @bot.message_handler(commands=["start"])
 def start(message):
 
-    parts = message.text.split()
+    user_id = message.from_user.id
 
-    # haddii user si toos ah u yimid
-    if len(parts) == 1:
+    save_user(user_id)
+
+    not_joined = check_join(user_id)
+
+    if not_joined:
 
         kb = InlineKeyboardMarkup()
+
+        for ch in not_joined:
+
+            kb.add(
+                InlineKeyboardButton(
+                    f"Join {ch}",
+                    url=f"https://t.me/{ch.replace('@','')}"
+                )
+            )
+
         kb.add(
             InlineKeyboardButton(
-                "Open Verify System",
-                url="https://t.me/Verify_yourbot"
+                "✅ Verify Join",
+                callback_data="verify_join"
             )
         )
 
         bot.send_message(
-            message.chat.id,
-            """
-❌ You are not registered in the verify system.
 
-Please register your bot first.
-""",
+            message.chat.id,
+
+            "⚠️ Please join all channels to continue",
+
             reply_markup=kb
+
         )
+
         return
 
-    # user ka yimid bot system
-    user_id = parts[1]
+    send_verify_panel(message.chat.id)
 
-    code = random.randint(100000, 999999)
 
-    data = load_codes()
+# ---------------- VERIFY PANEL ----------------
 
-    data[str(user_id)] = code
+def send_verify_panel(chat_id):
 
-    save_codes(data)
+    kb = InlineKeyboardMarkup()
+
+    kb.add(
+
+        InlineKeyboardButton(
+            "🔐 Verify",
+            callback_data="verify"
+        )
+
+    )
 
     bot.send_message(
-        message.chat.id,
+
+        chat_id,
+
+        "Press verify to continue",
+
+        reply_markup=kb
+
+    )
+
+
+# ---------------- VERIFY JOIN BUTTON ----------------
+
+@bot.callback_query_handler(func=lambda call: call.data == "verify_join")
+def verify_join(call):
+
+    user_id = call.from_user.id
+
+    not_joined = check_join(user_id)
+
+    if not_joined:
+
+        bot.answer_callback_query(
+
+            call.id,
+
+            "❌ You must join channels",
+
+            show_alert=True
+
+        )
+
+        return
+
+    bot.edit_message_text(
+
+        "✅ Join verified",
+
+        call.message.chat.id,
+
+        call.message.message_id
+
+    )
+
+    send_verify_panel(call.message.chat.id)
+
+
+# ---------------- VERIFY BUTTON ----------------
+
+@bot.callback_query_handler(func=lambda call: call.data == "verify")
+def verify(call):
+
+    user_id = call.from_user.id
+
+    code = str(user_id)
+
+    codes_collection.insert_one(
+
+        {
+            "user_id": user_id,
+            "code": code
+        }
+
+    )
+
+    bot.send_message(
+
+        call.message.chat.id,
+
         f"""
-🔐 VERIFY SYSTEM
+✅ Verification Complete
 
-Your verification code:
+Your Code:
 
-{code}
+`{code}`
 
-Send this code to the bot you want to use.
-"""
+Send this code to website.
+""",
+
+        parse_mode="Markdown"
+
     )
 
 
 print("Verify Bot Running...")
-bot.infinity_polling()
+
+bot.infinity_polling(skip_pending=True)
