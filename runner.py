@@ -2,11 +2,14 @@ import telebot
 import os
 import time
 import threading
+import requests
 from pymongo import MongoClient
 
-# -------- MONGODB CONNECTION --------
+# -------- ENV --------
 
 MONGO_URL = os.getenv("MONGO_URL")
+
+# -------- MONGODB --------
 
 client = MongoClient(MONGO_URL)
 
@@ -14,8 +17,10 @@ db = client["verify_system"]
 
 bots_collection = db["bots"]
 users_collection = db["users"]
+downloads_collection = db["downloads"]
+system_collection = db["system"]
 
-# -------- RUNNING BOTS STORAGE --------
+# -------- RUNNING BOTS --------
 
 running_bots = {}
 
@@ -29,6 +34,51 @@ def save_user(uid):
         upsert=True
     )
 
+# -------- CHECK SYSTEM --------
+
+def bots_active():
+
+    s = system_collection.find_one({"system":"bots"})
+
+    if not s:
+        return True
+
+    return s.get("active",True)
+
+# -------- TIKTOK DOWNLOAD --------
+
+def download_tiktok(url):
+
+    try:
+
+        api = f"https://tikwm.com/api/?url={url}"
+
+        r = requests.get(api).json()
+
+        if r["code"] != 0:
+            return None
+
+        data = r["data"]
+
+        if data.get("play"):
+
+            return {
+                "type":"video",
+                "media":data["play"]
+            }
+
+        if data.get("images"):
+
+            return {
+                "type":"photo",
+                "media":data["images"]
+            }
+
+    except:
+        pass
+
+    return None
+
 # -------- START USER BOT --------
 
 def start_user_bot(token):
@@ -40,8 +90,17 @@ def start_user_bot(token):
 
         bot = telebot.TeleBot(token)
 
+        # START
         @bot.message_handler(commands=["start"])
         def start(message):
+
+            if not bots_active():
+
+                bot.send_message(
+                    message.chat.id,
+                    "⚠️ Bots are temporarily disabled"
+                )
+                return
 
             uid = message.from_user.id
 
@@ -49,8 +108,78 @@ def start_user_bot(token):
 
             bot.send_message(
                 message.chat.id,
-                "✅ Bot is working!\n\nThis bot is connected to Verify System."
+                "🎬 Send TikTok link to download video or photos"
             )
+
+
+        # TIKTOK HANDLER
+        @bot.message_handler(func=lambda m: "tiktok.com" in m.text)
+        def tiktok(message):
+
+            if not bots_active():
+
+                bot.send_message(
+                    message.chat.id,
+                    "⚠️ Bots are temporarily disabled"
+                )
+                return
+
+            url = message.text
+
+            bot.send_message(
+                message.chat.id,
+                "⏳ Downloading..."
+            )
+
+            result = download_tiktok(url)
+
+            if not result:
+
+                bot.send_message(
+                    message.chat.id,
+                    "❌ Download failed"
+                )
+                return
+
+
+            bot_username = bot.get_me().username
+
+
+            # VIDEO
+            if result["type"] == "video":
+
+                bot.send_video(
+                    message.chat.id,
+                    result["media"],
+                    caption=f"Via @{bot_username}"
+                )
+
+                downloads_collection.insert_one({
+                    "type":"tiktok_video"
+                })
+
+
+            # PHOTOS
+            elif result["type"] == "photo":
+
+                for img in result["media"]:
+
+                    bot.send_photo(
+                        message.chat.id,
+                        img,
+                        caption=f"Via @{bot_username}"
+                    )
+
+                downloads_collection.insert_one({
+                    "type":"photo"
+                })
+
+
+            bot.send_message(
+                message.chat.id,
+                "Created: @Verify_yourbot"
+            )
+
 
         running_bots[token] = bot
 
@@ -62,7 +191,8 @@ def start_user_bot(token):
 
         print("❌ Bot start error:", e)
 
-# -------- LOAD ALL BOTS FROM DATABASE --------
+
+# -------- LOAD BOTS --------
 
 def load_all_bots():
 
@@ -82,6 +212,7 @@ def load_all_bots():
                 args=(token,),
                 daemon=True
             ).start()
+
 
 # -------- RUNNER LOOP --------
 
