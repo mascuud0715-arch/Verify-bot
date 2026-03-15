@@ -1,7 +1,10 @@
 import telebot
 import json
 import threading
+import time
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
+
+running_bots = {}
 
 def load_bots():
     try:
@@ -10,54 +13,58 @@ def load_bots():
     except:
         return []
 
-def run_bot(token):
+def start_bot(token):
+
+    if token in running_bots:
+        return
 
     bot = telebot.TeleBot(token)
-
-    verified_users=set()
 
     @bot.message_handler(commands=["start"])
     def start(message):
 
-        if message.from_user.id not in verified_users:
-
-            kb = InlineKeyboardMarkup()
-            kb.add(
-                InlineKeyboardButton(
-                    "VERIFY",
-                    url="https://t.me/Verifyd_bot"
-                )
+        kb = InlineKeyboardMarkup()
+        kb.add(
+            InlineKeyboardButton(
+                "✅ VERIFY",
+                url="https://t.me/Verifyd_bot"
             )
+        )
 
-            bot.send_message(
-                message.chat.id,
-                "❌ You Can't Use this Bot before verify",
-                reply_markup=kb
-            )
+        bot.send_message(
+            message.chat.id,
+            "❌ You Can't Use this Bot before verify",
+            reply_markup=kb
+        )
 
-        else:
+    print("Bot started:", token)
 
-            bot.send_message(
-                message.chat.id,
-                "✅ Welcome Verified User"
-            )
+    running_bots[token] = bot
 
     bot.infinity_polling()
 
-def start_all():
+def run_bot_thread(token):
+
+    t = threading.Thread(
+        target=start_bot,
+        args=(token,)
+    )
+
+    t.start()
+
+def start_all_bots():
 
     bots = load_bots()
 
     for b in bots:
 
-        t = threading.Thread(
-            target=run_bot,
-            args=(b["token"],)
-        )
+        token = b["token"]
 
-        t.start()
-
-start_all()
+        if token not in running_bots:
+            run_bot_thread(token)
 
 while True:
-    pass
+
+    start_all_bots()
+
+    time.sleep(20)
