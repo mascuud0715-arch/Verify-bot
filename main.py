@@ -39,22 +39,18 @@ def main_menu():
 
     return kb
 
-
 # ================= SAVE USER =================
 
 def save_user(user):
 
     users_collection.update_one(
         {"user_id": user.id},
-        {
-            "$set":{
-                "user_id": user.id,
-                "username": user.username
-            }
-        },
+        {"$set":{
+            "user_id": user.id,
+            "username": user.username
+        }},
         upsert=True
     )
-
 
 # ================= CHECK CHANNELS =================
 
@@ -83,6 +79,20 @@ def check_channels(user_id):
 
     return not_joined
 
+# ================= GET CHANNELS API =================
+
+@app.route("/channels")
+def get_channels():
+
+    channels = []
+
+    for ch in channels_collection.find({"active":True}):
+
+        channels.append(ch["username"])
+
+    return jsonify({
+        "channels":channels
+    })
 
 # ================= FORCE JOIN =================
 
@@ -114,7 +124,6 @@ def send_force_join(chat_id, channels):
         reply_markup=kb
     )
 
-
 # ================= START =================
 
 @bot.message_handler(commands=["start"])
@@ -140,7 +149,7 @@ Add your Telegram bot and turn it into a downloader.
 Steps:
 
 1️⃣ Create bot via @BotFather
-2️⃣ Copy the token
+2️⃣ Copy token
 3️⃣ Click Add Bot
 """
 
@@ -149,7 +158,6 @@ Steps:
         text,
         reply_markup=main_menu()
     )
-
 
 # ================= CONFIRM JOIN =================
 
@@ -180,7 +188,6 @@ def confirm_join(call):
         reply_markup=main_menu()
     )
 
-
 # ================= ADD BOT =================
 
 @bot.message_handler(func=lambda m: m.text == "➕ Add Bot")
@@ -192,7 +199,6 @@ def add_bot(message):
     )
 
     bot.register_next_step_handler(msg, save_bot)
-
 
 # ================= SAVE BOT =================
 
@@ -208,19 +214,18 @@ def save_bot(message):
 
         bots_collection.update_one(
             {"token": token},
-            {
-                "$set":{
-                    "token": token,
-                    "username": info.username,
-                    "owner": message.from_user.id
-                }
-            },
+            {"$set":{
+                "token": token,
+                "username": info.username,
+                "owner": message.from_user.id,
+                "active":True
+            }},
             upsert=True
         )
 
         bot.send_message(
             message.chat.id,
-            f"✅ Bot Added\n\n@{info.username}"
+            f"✅ Bot Added\n\n@{info.username}\n\nRunner will start it automatically."
         )
 
     except:
@@ -229,7 +234,6 @@ def save_bot(message):
             message.chat.id,
             "❌ Invalid bot token"
         )
-
 
 # ================= MY BOTS =================
 
@@ -253,7 +257,6 @@ def my_bots(message):
 
     bot.send_message(message.chat.id, text)
 
-
 # ================= VERIFY API =================
 
 @app.route("/verify")
@@ -263,23 +266,22 @@ def verify():
 
     if not user_id:
 
-        return jsonify({"status": "error"})
+        return jsonify({"status":"error"})
 
     not_joined = check_channels(user_id)
 
     if not not_joined:
 
         return jsonify({
-            "status": "joined"
+            "status":"joined"
         })
 
     else:
 
         return jsonify({
-            "status": "not_joined",
-            "channels": not_joined
+            "status":"not_joined",
+            "channels":not_joined
         })
-
 
 # ================= RUN BOT =================
 
@@ -296,7 +298,6 @@ def run_bot():
             print("BOT ERROR:", e)
             time.sleep(5)
 
-
 # ================= START =================
 
 if __name__ == "__main__":
@@ -306,9 +307,9 @@ if __name__ == "__main__":
 
     threading.Thread(target=run_bot).start()
 
-    port = int(os.environ.get("PORT", 5000))
+    port = int(os.environ.get("PORT",5000))
 
     app.run(
         host="0.0.0.0",
         port=port
-    )
+        )
