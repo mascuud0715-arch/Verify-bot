@@ -21,6 +21,7 @@ db = client["verify_system"]
 bots_collection = db["bots"]
 users_collection = db["users"]
 channels_collection = db["channels"]
+system_collection = db["system"]
 
 # ================= FLASK =================
 
@@ -35,6 +36,10 @@ def main_menu():
     kb.add(
         KeyboardButton("➕ Add Bot"),
         KeyboardButton("🤖 My Bots")
+    )
+
+    kb.add(
+        KeyboardButton("❌ Remove Bot")
     )
 
     return kb
@@ -98,13 +103,6 @@ def get_channels():
 
 def send_force_join(chat_id):
 
-    # hubi verify system
-    system = system_collection.find_one({"system": "verify"})
-
-    if not system or not system.get("active"):
-        return False
-
-    # qaado channels active
     channels = list(channels_collection.find({"active": True}))
 
     if len(channels) == 0:
@@ -150,20 +148,15 @@ def start(message):
 
     save_user(message.from_user)
 
-    # check if any active channels exist
     active_channels = channels_collection.count_documents({"active":True})
 
-    # haddii channels aysan jirin skip force join
     if active_channels > 0:
 
         not_joined = check_channels(message.from_user.id)
 
         if not_joined:
 
-            send_force_join(
-                message.chat.id,
-                not_joined
-            )
+            send_force_join(message.chat.id)
             return
 
     text = """
@@ -282,6 +275,50 @@ def my_bots(message):
 
     bot.send_message(message.chat.id, text)
 
+# ================= REMOVE BOT =================
+
+@bot.message_handler(func=lambda m: m.text == "❌ Remove Bot")
+def remove_bot(message):
+
+    msg = bot.send_message(
+        message.chat.id,
+        "Send bot username to remove\n\nExample:\n@mybot"
+    )
+
+    bot.register_next_step_handler(msg, remove_bot_process)
+
+def remove_bot_process(message):
+
+    username = message.text.replace("@","")
+
+    bot_data = bots_collection.find_one({"username":username})
+
+    if not bot_data:
+
+        bot.send_message(
+            message.chat.id,
+            "❌ Bot not found"
+        )
+        return
+
+    if bot_data["owner"] != message.from_user.id:
+
+        bot.send_message(
+            message.chat.id,
+            "❌ You are not owner of this bot"
+        )
+        return
+
+    bots_collection.update_one(
+        {"username":username},
+        {"$set":{"active":False}}
+    )
+
+    bot.send_message(
+        message.chat.id,
+        f"✅ @{username} removed and disabled"
+    )
+
 # ================= VERIFY API =================
 
 @app.route("/verify")
@@ -294,7 +331,6 @@ def verify():
 
     active_channels = channels_collection.count_documents({"active": True})
 
-    # haddii channels close yihiin
     if active_channels == 0:
         return jsonify({"status":"joined"})
 
@@ -342,4 +378,4 @@ if __name__ == "__main__":
     app.run(
         host="0.0.0.0",
         port=port
-        )
+    )
