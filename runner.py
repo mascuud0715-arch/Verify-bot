@@ -9,6 +9,7 @@ from pymongo import MongoClient
 # -------- ENV --------
 
 MONGO_URL = os.getenv("MONGO_URL")
+VERIFY_API = os.getenv("VERIFY_API")   # main bot api
 
 # -------- MONGODB --------
 
@@ -51,39 +52,35 @@ def bots_active():
 
     return s.get("active",True)
 
-# -------- FORCE JOIN CHECK --------
+# -------- VERIFY JOIN (MAIN BOT API) --------
 
-def check_force_join(bot, user_id):
+def verify_join(user_id):
 
-    channels = channels_collection.find({"active": True})
+    try:
 
-    not_joined = []
+        r = requests.get(
+            VERIFY_API,
+            params={"user_id":user_id},
+            timeout=10
+        ).json()
 
-    for ch in channels:
+        return r
 
-        try:
+    except:
 
-            member = bot.get_chat_member(ch["username"], user_id)
-
-            if member.status not in ["member","administrator","creator"]:
-
-                not_joined.append(ch["username"])
-
-        except:
-
-            not_joined.append(ch["username"])
-
-    return not_joined
+        return {"status":"error"}
 
 # -------- FORCE JOIN MESSAGE --------
 
-def send_force_join(bot, chat_id, channels):
+def send_force_join(bot, chat_id):
 
     kb = InlineKeyboardMarkup()
 
+    channels = channels_collection.find({"active":True})
+
     for ch in channels:
 
-        link = f"https://t.me/{ch.replace('@','')}"
+        link = f"https://t.me/{ch['username'].replace('@','')}"
 
         kb.add(
             InlineKeyboardButton("JOIN CHANNEL", url=link)
@@ -183,11 +180,6 @@ def process_download(bot, message, url):
             "user":uid
         })
 
-    bot.send_message(
-        message.chat.id,
-        "Created: @Verify_yourbot"
-    )
-
 # -------- START USER BOT --------
 
 def start_user_bot(token):
@@ -211,21 +203,9 @@ def start_user_bot(token):
                 )
                 return
 
-            uid = message.from_user.id
+            save_user(message.from_user.id)
 
-            save_user(uid)
-
-            not_joined = check_force_join(bot, uid)
-
-            if not_joined:
-
-                send_force_join(bot, message.chat.id, not_joined)
-                return
-
-            bot.send_message(
-                message.chat.id,
-                "🎬 Send TikTok link to download video or photos"
-            )
+            send_force_join(bot, message.chat.id)
 
         # CONFIRM JOIN
         @bot.callback_query_handler(func=lambda call:call.data=="confirm_join")
@@ -233,9 +213,9 @@ def start_user_bot(token):
 
             uid = call.from_user.id
 
-            not_joined = check_force_join(bot, uid)
+            r = verify_join(uid)
 
-            if not_joined:
+            if r["status"] != "joined":
 
                 bot.answer_callback_query(
                     call.id,
@@ -249,7 +229,6 @@ def start_user_bot(token):
                 "✅ Verification successful"
             )
 
-            # haddii link hore u jiray
             if uid in pending_links:
 
                 url = pending_links.pop(uid)
@@ -264,7 +243,7 @@ def start_user_bot(token):
                     call.message.message_id
                 )
 
-        # TIKTOK HANDLER
+        # TIKTOK LINK
         @bot.message_handler(func=lambda m: m.text and "tiktok.com" in m.text)
         def tiktok(message):
 
@@ -279,20 +258,20 @@ def start_user_bot(token):
             uid = message.from_user.id
             url = message.text
 
-            not_joined = check_force_join(bot, uid)
+            r = verify_join(uid)
 
-            if not_joined:
+            if r["status"] != "joined":
 
                 pending_links[uid] = url
 
-                send_force_join(bot, message.chat.id, not_joined)
+                send_force_join(bot, message.chat.id)
                 return
 
             process_download(bot, message, url)
 
         running_bots[token] = bot
 
-        print("✅ Started bot:", token)
+        print("✅ Started bot")
 
         bot.infinity_polling(skip_pending=True)
 
