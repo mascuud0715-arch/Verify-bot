@@ -583,15 +583,12 @@ def preview(call):
 @bot.callback_query_handler(func=lambda c:c.data=="send_bc")
 def send_broadcast(call):
 
-    users=users_collection.find()
-    bots=bots_collection.find()
+    text = f"{broadcast_data['style']} {broadcast_data['text']}"
 
-    text=f"{broadcast_data['style']} {broadcast_data['text']}"
-
-    kb=InlineKeyboardMarkup()
+    # buttons
+    kb = InlineKeyboardMarkup()
 
     for b in broadcast_data["buttons"]:
-
         kb.add(
             InlineKeyboardButton(
                 b[0],
@@ -599,13 +596,32 @@ def send_broadcast(call):
             )
         )
 
-    sent=0
+    bots = list(bots_collection.find())
+
+    total_bots = 0
+    total_users = 0
+    delivered = 0
 
     for b in bots:
 
         try:
 
-            send_bot=telebot.TeleBot(b["token"])
+            send_bot = telebot.TeleBot(b["token"])
+
+            # users of this bot
+            users = list(
+                users_collection.find(
+                    {"bot": b["username"]}
+                )
+            )
+
+            bot_users = len(users)
+
+            if bot_users == 0:
+                continue
+
+            total_bots += 1
+            total_users += bot_users
 
             for u in users:
 
@@ -617,7 +633,7 @@ def send_broadcast(call):
                         reply_markup=kb
                     )
 
-                    sent+=1
+                    delivered += 1
 
                 except:
                     pass
@@ -625,13 +641,22 @@ def send_broadcast(call):
         except:
             pass
 
+
     bot.send_message(
         call.message.chat.id,
-        f"📢 Broadcast sent\nDelivered: {sent}"
+        f"""
+📢 BROADCAST SENT
+
+🤖 Bots Used: {total_bots}
+
+👥 Total Users: {total_users}
+
+📬 Delivered: {delivered}
+"""
     )
 
-    broadcast_data["text"]=None
-    broadcast_data["buttons"]=[]
+    broadcast_data["text"] = None
+    broadcast_data["buttons"] = []
 
 
 # ==============================
