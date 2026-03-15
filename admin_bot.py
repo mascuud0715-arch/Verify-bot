@@ -161,11 +161,22 @@ def show_api(call):
 
 
 # ================= BROADCAST =================
+# ================= BROADCAST =================
+
+broadcast_mode=False
+button_mode=False
+broadcast_text=""
+button_text=""
+button_link=""
+
 
 @bot.message_handler(func=lambda m:m.text=="📢 Broadcast")
 def broadcast(message):
 
     global broadcast_mode
+
+    if message.from_user.id!=ADMIN_ID:
+        return
 
     broadcast_mode=True
 
@@ -178,13 +189,13 @@ def broadcast(message):
 @bot.message_handler(func=lambda m:True)
 def broadcast_steps(message):
 
-    global broadcast_mode,button_mode,broadcast_text,button_text,button_link
+    global broadcast_mode,button_mode,broadcast_text
 
     if message.from_user.id!=ADMIN_ID:
         return
 
 
-    # Step 1 receive message
+    # STEP 1 RECEIVE MESSAGE
     if broadcast_mode:
 
         broadcast_text=message.text
@@ -203,7 +214,7 @@ def broadcast_steps(message):
         return
 
 
-    # Step 2 choose button
+    # STEP 2 BUTTON CHOICE
     if button_mode and message.text=="Add Button":
 
         bot.send_message(
@@ -263,31 +274,44 @@ def get_button_link(message):
     )
 
 
+# ================= SEND BROADCAST =================
+
 def send_broadcast(chat_id,kb):
 
     users=load_users()
+    bots=load_bots()
 
     sent=0
 
-    for u in users:
+    for b in bots:
 
         try:
 
-            if kb:
-                bot.send_message(u,broadcast_text,reply_markup=kb)
-            else:
-                bot.send_message(u,broadcast_text)
+            token=b["token"]
+            send_bot=telebot.TeleBot(token)
 
-            sent+=1
+            for u in users:
+
+                try:
+
+                    if kb:
+                        send_bot.send_message(u,broadcast_text,reply_markup=kb)
+                    else:
+                        send_bot.send_message(u,broadcast_text)
+
+                    sent+=1
+
+                except:
+                    pass
 
         except:
             pass
 
+
     bot.send_message(
         chat_id,
-        f"📢 Broadcast delivered to {sent} users"
+        f"📢 Broadcast delivered to {sent} users using all bots"
     )
-
 
 # ================= ADD CHANNEL =================
 
