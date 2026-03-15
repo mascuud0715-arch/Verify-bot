@@ -63,7 +63,7 @@ def download_tiktok(url):
             api = f"https://tikwm.com/api/?url={url}"
 
             headers = {
-                "User-Agent":"Mozilla/5.0"
+                "User-Agent": "Mozilla/5.0"
             }
 
             r = session.get(api, headers=headers, timeout=60)
@@ -76,21 +76,26 @@ def download_tiktok(url):
 
             d = data["data"]
 
-            if d.get("play"):
-
-                return {
-                    "type":"video",
-                    "media":d["play"]
-                }
-
+            # PHOTO SLIDESHOW FIRST
             if d.get("images"):
 
                 return {
-                    "type":"photo",
-                    "media":d["images"]
+                    "type": "photo",
+                    "media": d["images"]
                 }
 
-        except:
+            # VIDEO
+            if d.get("play"):
+
+                return {
+                    "type": "video",
+                    "media": d["play"]
+                }
+
+        except Exception as e:
+
+            print("TikTok API error:", e)
+
             time.sleep(1)
 
     return None
