@@ -184,15 +184,16 @@ def download_photo(url):
 
 def process_download(bot, chat_id, uid, url):
 
+    # CHECK ADMIN STATUS
+    if not downloader_enabled():
+
+        bot.send_message(
+            chat_id,
+            "⛔ Downloader disabled by admin."
+        )
+        return
+
     try:
-
-        if not downloader_enabled():
-
-            bot.send_message(
-                chat_id,
-                "⛔ Downloader is currently disabled by admin"
-            )
-            return
 
         if not verify_user(uid):
 
