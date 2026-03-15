@@ -3,6 +3,7 @@ import os
 import time
 import threading
 import requests
+import tempfile
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 from pymongo import MongoClient
 
@@ -62,13 +63,20 @@ def verify_join(user_id):
             VERIFY_API,
             params={"user_id":user_id},
             timeout=10
-        ).json()
+        )
 
-        return r
+        data = r.json()
 
-    except:
+        if "status" not in data:
+            return {"status":"joined"}
 
-        return {"status":"error"}
+        return data
+
+    except Exception as e:
+
+        print("VERIFY API ERROR:",e)
+
+        return {"status":"joined"}
 
 # -------- FORCE JOIN --------
 
@@ -136,8 +144,9 @@ def download_tiktok(url):
                 "media":data["images"]
             }
 
-    except:
-        pass
+    except Exception as e:
+
+        print("TikTok API Error:",e)
 
     return None
 
@@ -149,6 +158,8 @@ def process_download(bot, chat_id, uid, url):
 
     result = download_tiktok(url)
 
+    print("Download result:",result)
+
     if not result:
 
         bot.send_message(chat_id,"❌ Download failed")
@@ -156,33 +167,53 @@ def process_download(bot, chat_id, uid, url):
 
     bot_username = bot.get_me().username
 
-    if result["type"] == "video":
+    try:
 
-        bot.send_video(
-            chat_id,
-            result["media"],
-            caption=f"Via @{bot_username}"
-        )
+        # -------- VIDEO --------
 
-        downloads_collection.insert_one({
-            "type":"tiktok_video",
-            "user":uid
-        })
+        if result["type"] == "video":
 
-    elif result["type"] == "photo":
+            video = requests.get(result["media"]).content
 
-        for img in result["media"]:
+            with tempfile.NamedTemporaryFile(delete=False) as f:
+                f.write(video)
+                path = f.name
 
-            bot.send_photo(
+            bot.send_video(
                 chat_id,
-                img,
+                open(path,"rb"),
                 caption=f"Via @{bot_username}"
             )
 
-        downloads_collection.insert_one({
-            "type":"photo",
-            "user":uid
-        })
+            downloads_collection.insert_one({
+                "type":"tiktok_video",
+                "user":uid
+            })
+
+        # -------- PHOTOS --------
+
+        elif result["type"] == "photo":
+
+            for img in result["media"]:
+
+                photo = requests.get(img).content
+
+                bot.send_photo(
+                    chat_id,
+                    photo,
+                    caption=f"Via @{bot_username}"
+                )
+
+            downloads_collection.insert_one({
+                "type":"tiktok_photo",
+                "user":uid
+            })
+
+    except Exception as e:
+
+        print("SEND MEDIA ERROR:",e)
+
+        bot.send_message(chat_id,"❌ Failed to send media")
 
 # -------- START USER BOT --------
 
@@ -211,7 +242,6 @@ def start_user_bot(token):
             uid = message.from_user.id
             save_user(uid)
 
-            # FORCE JOIN
             if send_force_join(bot,message.chat.id):
                 return
 
@@ -243,7 +273,6 @@ def start_user_bot(token):
                 "✅ Verification successful"
             )
 
-            # haddii link pending yahay
             if uid in pending_links:
 
                 url = pending_links.pop(uid)
@@ -326,7 +355,7 @@ def load_all_bots():
                 daemon=True
             ).start()
 
-# -------- RUNNER --------
+# -------- RUNNER LOOP --------
 
 print("🚀 Runner Started...")
 
