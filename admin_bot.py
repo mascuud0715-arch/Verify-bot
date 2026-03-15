@@ -26,10 +26,6 @@ system_collection = db["system"]
 # ---------- STATES ----------
 
 broadcast_mode=False
-button_mode=False
-broadcast_text=""
-button_text=""
-button_link=""
 
 # ---------- MENU ----------
 
@@ -62,6 +58,11 @@ def admin_menu():
     kb.add(
         KeyboardButton("🚫 Close Bots"),
         KeyboardButton("✅ Open Bots")
+    )
+
+    kb.add(
+        KeyboardButton("🟢 Verify ON"),
+        KeyboardButton("🔴 Verify OFF")
     )
 
     return kb
@@ -191,7 +192,7 @@ def bot_api(call):
     )
 
 
-# ---------- ADD CHANNEL (MAX 5) ----------
+# ---------- ADD CHANNEL ----------
 
 @bot.message_handler(func=lambda m:m.text=="➕ Add Channel")
 def add_channel(message):
@@ -218,27 +219,6 @@ def save_channel(message):
 
     channel = message.text.strip()
 
-    try:
-
-        member = bot.get_chat_member(channel, bot.get_me().id)
-
-        if member.status not in ["administrator","creator"]:
-
-            bot.send_message(
-                message.chat.id,
-                "❌ Bot must be admin in this channel"
-            )
-            return
-
-    except:
-
-        bot.send_message(
-            message.chat.id,
-            "❌ Cannot access channel"
-        )
-        return
-
-
     channels_collection.update_one(
         {"username":channel},
         {"$set":{"username":channel,"active":True}},
@@ -260,15 +240,9 @@ def channels(message):
 
     text="📡 Force Join Channels\n\n"
 
-    found=False
-
     for c in channels:
 
         text+=c["username"]+"\n"
-        found=True
-
-    if not found:
-        text="No active channels"
 
     bot.send_message(message.chat.id,text)
 
@@ -320,6 +294,40 @@ def open_bots(message):
     bot.send_message(
         message.chat.id,
         "✅ Bots activated"
+    )
+
+
+# ---------- VERIFY ON ----------
+
+@bot.message_handler(func=lambda m:m.text=="🟢 Verify ON")
+def verify_on(message):
+
+    system_collection.update_one(
+        {"system":"verify"},
+        {"$set":{"active":True}},
+        upsert=True
+    )
+
+    bot.send_message(
+        message.chat.id,
+        "🟢 Verification Enabled"
+    )
+
+
+# ---------- VERIFY OFF ----------
+
+@bot.message_handler(func=lambda m:m.text=="🔴 Verify OFF")
+def verify_off(message):
+
+    system_collection.update_one(
+        {"system":"verify"},
+        {"$set":{"active":False}},
+        upsert=True
+    )
+
+    bot.send_message(
+        message.chat.id,
+        "🔴 Verification Disabled"
     )
 
 
