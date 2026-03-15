@@ -234,27 +234,30 @@ def start_user_bot(token):
         bot = telebot.TeleBot(token)
 
         # -------- START --------
+        # -------- START --------
 
-        @bot.message_handler(commands=["start"])
-        def start(message):
+@bot.message_handler(commands=["start"])
+def start(message):
 
-            if not bots_active():
+    if not bots_active():
 
-                bot.send_message(
-                    message.chat.id,
-                    "⚠️ Bots are temporarily disabled"
-                )
-                return
+        bot.send_message(
+            message.chat.id,
+            "⚠️ Bots are temporarily disabled"
+        )
+        return
 
-            uid = message.from_user.id
-            save_user(uid)
+    uid = message.from_user.id
+    save_user(uid)
 
-            if send_force_join(bot,message.chat.id):
-                return
+    # Force join haddii channels jiraan
+    if send_force_join(bot, message.chat.id):
+        return
 
-              bot.send_message(
-    message.chat.id,
-    """👋 Welcome to TikTok Downloader Bot
+    # Start message
+    bot.send_message(
+        message.chat.id,
+        """👋 Welcome to TikTok Downloader Bot
 
 📥 Send any TikTok link and I will download it instantly.
 
@@ -269,7 +272,7 @@ Just send a TikTok link to begin.
 
 Create your own downloader:
 @Verify_yourbot"""
-            )
+    )
 
         # -------- CONFIRM JOIN --------
 
