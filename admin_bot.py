@@ -11,7 +11,7 @@ MONGO_URL = os.getenv("MONGO_URL")
 
 bot = telebot.TeleBot(TOKEN)
 
-# ---------- MONGODB ----------
+# ---------- DATABASE ----------
 
 client = MongoClient(MONGO_URL)
 
@@ -22,6 +22,14 @@ users_collection = db["users"]
 channels_collection = db["channels"]
 downloads_collection = db["downloads"]
 system_collection = db["system"]
+
+# ---------- STATES ----------
+
+broadcast_mode=False
+button_mode=False
+broadcast_text=""
+button_text=""
+button_link=""
 
 # ---------- MENU ----------
 
@@ -101,7 +109,7 @@ def stats(message):
 @bot.message_handler(func=lambda m:m.text=="📊 Media Stats")
 def media_stats(message):
 
-    tiktok = downloads_collection.count_documents({"type":"tiktok"})
+    tiktok = downloads_collection.count_documents({"type":"tiktok_video"})
     photo = downloads_collection.count_documents({"type":"photo"})
     total = downloads_collection.count_documents({})
 
@@ -183,6 +191,104 @@ def bot_api(call):
     )
 
 
+# ---------- ADD CHANNEL (MAX 5) ----------
+
+@bot.message_handler(func=lambda m:m.text=="➕ Add Channel")
+def add_channel(message):
+
+    total = channels_collection.count_documents({"active":True})
+
+    if total >= 5:
+
+        bot.send_message(
+            message.chat.id,
+            "❌ Maximum 5 channels allowed"
+        )
+        return
+
+    bot.send_message(
+        message.chat.id,
+        "Send channel username\nExample:\n@channel"
+    )
+
+    bot.register_next_step_handler(message,save_channel)
+
+
+def save_channel(message):
+
+    channel = message.text.strip()
+
+    try:
+
+        member = bot.get_chat_member(channel, bot.get_me().id)
+
+        if member.status not in ["administrator","creator"]:
+
+            bot.send_message(
+                message.chat.id,
+                "❌ Bot must be admin in this channel"
+            )
+            return
+
+    except:
+
+        bot.send_message(
+            message.chat.id,
+            "❌ Cannot access channel"
+        )
+        return
+
+
+    channels_collection.update_one(
+        {"username":channel},
+        {"$set":{"username":channel,"active":True}},
+        upsert=True
+    )
+
+    bot.send_message(
+        message.chat.id,
+        f"✅ Channel Added\n{channel}"
+    )
+
+
+# ---------- CHANNEL LIST ----------
+
+@bot.message_handler(func=lambda m:m.text=="📡 Channels")
+def channels(message):
+
+    channels=channels_collection.find({"active":True})
+
+    text="📡 Force Join Channels\n\n"
+
+    found=False
+
+    for c in channels:
+
+        text+=c["username"]+"\n"
+        found=True
+
+    if not found:
+        text="No active channels"
+
+    bot.send_message(message.chat.id,text)
+
+
+# ---------- CLOSE CHANNELS ----------
+
+@bot.message_handler(func=lambda m:m.text=="❌ Close Channels")
+def close_channels(message):
+
+    channels_collection.update_many(
+        {},
+        {"$set":{"active":False}}
+    )
+
+    bot.send_message(
+        message.chat.id,
+        "❌ All channels disabled"
+    )
+
+
 # ---------- CLOSE BOTS ----------
 
 @bot.message_handler(func=lambda m:m.text=="🚫 Close Bots")
@@ -217,107 +323,12 @@ def open_bots(message):
     )
 
 
-# ---------- ADD CHANNEL ----------
-
-@bot.message_handler(func=lambda m:m.text=="➕ Add Channel")
-def add_channel(message):
-
-    bot.send_message(
-        message.chat.id,
-        "Send channel username\nExample:\n@channel"
-    )
-
-    bot.register_next_step_handler(message,save_channel)
-
-
-def save_channel(message):
-
-    channel = message.text.strip()
-
-    try:
-
-        member = bot.get_chat_member(channel, bot.get_me().id)
-
-        if member.status not in ["administrator","creator"]:
-
-            bot.send_message(
-                message.chat.id,
-                "❌ Bot is not admin in this channel"
-            )
-            return
-
-    except:
-
-        bot.send_message(
-            message.chat.id,
-            "❌ Cannot access channel\nMake sure bot is admin"
-        )
-        return
-
-
-    channels_collection.update_one(
-        {"username":channel},
-        {"$set":{"username":channel,"active":True}},
-        upsert=True
-    )
-
-    bot.send_message(
-        message.chat.id,
-        f"✅ Channel Added\n{channel}"
-    )
-
-
-# ---------- CHANNEL LIST ----------
-
-@bot.message_handler(func=lambda m:m.text=="📡 Channels")
-def channels(message):
-
-    channels=channels_collection.find({"active":True})
-
-    text="📡 Force Join Channels\n\n"
-
-    found=False
-
-    for c in channels:
-
-        text+=c["username"]+"\n"
-
-        found=True
-
-    if not found:
-
-        text="No active channels"
-
-    bot.send_message(message.chat.id,text)
-
-
-# ---------- CLOSE CHANNELS ----------
-
-@bot.message_handler(func=lambda m:m.text=="❌ Close Channels")
-def close_channels(message):
-
-    channels_collection.update_many(
-        {},
-        {"$set":{"active":False}}
-    )
-
-    bot.send_message(
-        message.chat.id,
-        "❌ All force join channels disabled"
-    )
-
-
 # ---------- BROADCAST ----------
-
-broadcast_mode=False
 
 @bot.message_handler(func=lambda m:m.text=="📢 Broadcast")
 def broadcast(message):
 
     global broadcast_mode
-
-    if message.from_user.id!=ADMIN_ID:
-        return
 
     broadcast_mode=True
 
@@ -328,27 +339,39 @@ def broadcast(message):
 
 
 @bot.message_handler(func=lambda m:True)
-def send_bc(message):
+def broadcast_steps(message):
 
     global broadcast_mode
 
     if not broadcast_mode:
         return
 
-    users=users_collection.find()
+    text = message.text
+
+    users = users_collection.find()
+    bots = bots_collection.find()
 
     sent=0
 
-    for u in users:
+    for b in bots:
 
         try:
 
-            bot.send_message(
-                u["user_id"],
-                message.text
-            )
+            send_bot=telebot.TeleBot(b["token"])
 
-            sent+=1
+            for u in users:
+
+                try:
+
+                    send_bot.send_message(
+                        u["user_id"],
+                        text
+                    )
+
+                    sent+=1
+
+                except:
+                    pass
 
         except:
             pass
@@ -357,8 +380,7 @@ def send_bc(message):
 
     bot.send_message(
         message.chat.id,
-        f"📢 Broadcast delivered to {sent} users",
-        reply_markup=admin_menu()
+        f"📢 Broadcast sent via bots\nDelivered: {sent}"
     )
 
 
