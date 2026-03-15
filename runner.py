@@ -1,37 +1,10 @@
-import telebot
 import json
-import threading
 import time
-from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
+import telebot
 
-VERIFY_BOT="Verifyd_bot"
+running = {}
 
-def run_bot(token):
-
-    bot=telebot.TeleBot(token)
-
-    @bot.message_handler(commands=['start'])
-    def start(msg):
-
-        kb=InlineKeyboardMarkup()
-
-        kb.add(
-            InlineKeyboardButton(
-                "✅ Verify",
-                url=f"https://t.me/{VERIFY_BOT}"
-            )
-        )
-
-        bot.send_message(
-            msg.chat.id,
-            "Welcome!\n\nFadlan Verify samee.",
-            reply_markup=kb
-        )
-
-    bot.infinity_polling()
-
-def load():
-
+def load_bots():
     try:
         with open("bots.json") as f:
             return json.load(f)
@@ -40,17 +13,38 @@ def load():
 
 while True:
 
-    bots=load()
+    bots = load_bots()
 
-    for b in bots.values():
+    for token,data in bots.items():
 
-        token=b["token"]
+        if token not in running:
 
-        t=threading.Thread(
-            target=run_bot,
-            args=(token,)
-        )
+            try:
 
-        t.start()
+                bot = telebot.TeleBot(token)
 
-    time.sleep(999999)
+                @bot.message_handler(commands=['start'])
+                def start(msg):
+
+                    bot.send_message(
+                        msg.chat.id,
+                        "Welcome to verify system"
+                    )
+
+                import threading
+
+                t = threading.Thread(
+                    target=bot.infinity_polling
+                )
+
+                t.start()
+
+                running[token] = True
+
+                print("Bot started",data["username"])
+
+            except:
+
+                pass
+
+    time.sleep(10)
