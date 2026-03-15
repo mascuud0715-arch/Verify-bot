@@ -57,33 +57,54 @@ def save_user(uid):
         upsert=True
     )
 
-# ================= CHECK DOWNLOADER STATUS =================
+# ================= SYSTEM STATUS =================
 
-def downloader_enabled():
+def system_status():
 
     data = system_collection.find_one({"name": "system"})
 
     if not data:
-        return True
 
-    return data.get("downloader_status", True)
+        system_collection.insert_one({
+            "name": "system",
+            "bots_status": True,
+            "verify_status": True
+        })
 
-# ================= VERIFY USER =================
+        return True, True
+
+    return data.get("bots_status", True), data.get("verify_status", True)
+
+# ================= CHECK VERIFY =================
 
 def verify_user(uid):
+
+    bots_status, verify_status = system_status()
+
+    # haddii verify OFF
+    if not verify_status:
+        return True
 
     data = codes_collection.find_one({"user_id": uid})
 
     if not data:
         return False
 
+    # expire check
     if data.get("expire", 0) < time.time():
 
         codes_collection.delete_one({"user_id": uid})
-
         return False
 
     return True
+
+# ================= CHECK BOT STATUS =================
+
+def bots_enabled():
+
+    bots_status, verify_status = system_status()
+
+    return bots_status
 
 # ================= TIKTOK API =================
 
@@ -104,12 +125,13 @@ def download_tiktok(url):
             data = r.json()
 
             if data.get("code") != 0:
+
                 time.sleep(1)
                 continue
 
             d = data["data"]
 
-            # PHOTO SLIDESHOW
+            # PHOTO SLIDE
             if d.get("images"):
 
                 return {
@@ -152,7 +174,7 @@ def download_video(url):
 
     except Exception as e:
 
-        print("Video download error:", e)
+        print("Video error:", e)
 
     return None
 
@@ -175,7 +197,7 @@ def download_photo(url):
 
     except Exception as e:
 
-        print("Photo download error:", e)
+        print("Photo error:", e)
 
     return None
 
@@ -183,12 +205,13 @@ def download_photo(url):
 
 def process_download(bot, chat_id, uid, url):
 
-    if not downloader_enabled():
+    if not bots_enabled():
 
         bot.send_message(
             chat_id,
-            "⛔ Downloader disabled by admin."
+            "⛔ Bots are currently closed by admin."
         )
+
         return
 
     try:
@@ -199,6 +222,7 @@ def process_download(bot, chat_id, uid, url):
                 chat_id,
                 "⚠️ You must verify first.\n\nGo to @Verify_owner_bot and get your code."
             )
+
             return
 
         bot.send_message(chat_id, "⏳ Downloading...")
@@ -212,8 +236,7 @@ def process_download(bot, chat_id, uid, url):
 
         bot_username = bot.get_me().username
 
-        # ================= VIDEO =================
-
+        # VIDEO
         if result["type"] == "video":
 
             path = download_video(result["media"])
@@ -244,8 +267,7 @@ def process_download(bot, chat_id, uid, url):
                 "user": uid
             })
 
-        # ================= PHOTO =================
-
+        # PHOTO SLIDESHOW
         elif result["type"] == "photo":
 
             for img in result["media"]:
@@ -276,9 +298,9 @@ def process_download(bot, chat_id, uid, url):
 
     except Exception as e:
 
-        print("Process error:", e)
+        print("Download error:", e)
 
-        bot.send_message(chat_id, "❌ Download error")
+        bot.send_message(chat_id, "❌ Error downloading")
 
 # ================= START USER BOT =================
 
@@ -294,7 +316,7 @@ def start_user_bot(token):
 
         running_bots[token] = bot
 
-        # -------- START COMMAND --------
+        # -------- START --------
 
         @bot.message_handler(commands=["start"])
         def start(message):
@@ -324,13 +346,12 @@ Create your own downloader:
 @Verify_yourbot"""
             )
 
-        # -------- CODE VERIFY --------
+        # -------- VERIFY CODE --------
 
         @bot.message_handler(func=lambda m: m.text and m.text.isdigit())
         def verify_code(message):
 
             uid = message.from_user.id
-
             code = message.text.strip()
 
             data = codes_collection.find_one({"code": code})
@@ -343,7 +364,6 @@ Create your own downloader:
                 )
                 return
 
-            # CHECK EXPIRE
             if data.get("expire", 0) < time.time():
 
                 bot.send_message(
@@ -363,7 +383,6 @@ Create your own downloader:
                 )
                 return
 
-            # SAVE VERIFIED USER
             codes_collection.update_one(
                 {"user_id": uid},
                 {"$set": {"verified": True}}
@@ -371,12 +390,12 @@ Create your own downloader:
 
             bot.send_message(
                 message.chat.id,
-                "✅ Verification successful\n\nNow send TikTok link."
+                "✅ Verification successful\n\nSend TikTok link now."
             )
 
         # -------- TIKTOK LINK --------
 
-        @bot.message_handler(func=lambda m: m.text and "tiktok.com" in m.text)
+        @bot.message_handler(func=lambda m: m.text and ("tiktok.com" in m.text or "vt.tiktok.com" in m.text))
         def tiktok(message):
 
             uid = message.from_user.id
@@ -405,20 +424,42 @@ Create your own downloader:
 
 # ================= RUNNER LOOP =================
 
-print("🚀 Runner Started...")
+print("🚀 Runner System Started...")
 
 while True:
 
     try:
 
+        bots_status, verify_status = system_status()
+
         bots = list(bots_collection.find())
 
         active_tokens = []
 
+        # haddii admin close bots
+        if not bots_status:
+
+            for token in list(running_bots.keys()):
+
+                print("🔴 Bots closed by admin:", token)
+
+                try:
+                    running_bots[token].stop_polling()
+                except:
+                    pass
+
+                try:
+                    del running_bots[token]
+                except:
+                    pass
+
+            time.sleep(10)
+            continue
+
+        # start bots
         for b in bots:
 
             token = b.get("token")
-
             active = b.get("active", True)
 
             if not token:
@@ -454,8 +495,7 @@ while True:
                     except:
                         pass
 
-        # REMOVE BOTS IF DELETED
-
+        # remove bots haddii DB laga tiray
         for token in list(running_bots.keys()):
 
             if token not in active_tokens:
