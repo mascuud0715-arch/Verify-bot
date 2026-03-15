@@ -4,7 +4,8 @@ import time
 import threading
 import requests
 import tempfile
-from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
+from concurrent.futures import ThreadPoolExecutor
+from telebot.types import InputMediaPhoto
 from pymongo import MongoClient
 
 # ================= ENV =================
@@ -27,6 +28,10 @@ channels_collection = db["channels"]
 
 running_bots = {}
 
+# ================= HIGH SPEED THREAD POOL =================
+
+download_pool = ThreadPoolExecutor(max_workers=200)
+
 # ================= SAVE USER =================
 
 def save_user(uid):
@@ -45,7 +50,7 @@ def download_tiktok(url):
 
         api = f"https://tikwm.com/api/?url={url}"
 
-        r = requests.get(api).json()
+        r = requests.get(api, timeout=60).json()
 
         if r["code"] != 0:
             return None
@@ -90,14 +95,14 @@ def process_download(bot, chat_id, uid, url):
 
     try:
 
-        # ===== VIDEO =====
+        # ================= VIDEO =================
 
         if result["type"] == "video":
 
-            video = requests.get(result["media"]).content
+            video_data = requests.get(result["media"], timeout=120).content
 
             with tempfile.NamedTemporaryFile(delete=False) as f:
-                f.write(video)
+                f.write(video_data)
                 path = f.name
 
             bot.send_video(
@@ -116,17 +121,31 @@ def process_download(bot, chat_id, uid, url):
                 "user": uid
             })
 
-# ===== PHOTO SLIDESHOW =====
+        # ================= PHOTO SLIDESHOW =================
 
         elif result["type"] == "photo":
 
+            media_group = []
+
             for img in result["media"]:
 
-                photo = requests.get(img).content
+                photo_data = requests.get(img, timeout=60).content
 
-                bot.send_photo(
+                with tempfile.NamedTemporaryFile(delete=False) as f:
+                    f.write(photo_data)
+                    photo_path = f.name
+
+                media_group.append(
+                    InputMediaPhoto(
+                        open(photo_path, "rb")
+                    )
+                )
+
+            if media_group:
+
+                bot.send_media_group(
                     chat_id,
-                    photo
+                    media_group
                 )
 
             bot.send_message(
@@ -155,9 +174,8 @@ def start_user_bot(token):
 
     try:
 
-        bot = telebot.TeleBot(token)
+        bot = telebot.TeleBot(token, threaded=True)
 
-        # store bot object si loo joojiyo haddii remove la sameeyo
         running_bots[token] = bot
 
         @bot.message_handler(commands=["start"])
@@ -191,7 +209,9 @@ Create your own downloader:
             uid = message.from_user.id
             url = message.text.strip()
 
-            process_download(
+            # HIGH SPEED THREAD DOWNLOAD
+            download_pool.submit(
+                process_download,
                 bot,
                 message.chat.id,
                 uid,
@@ -206,7 +226,6 @@ Create your own downloader:
 
         print("❌ Bot start error:", e)
 
-
 # ================= RUNNER LOOP =================
 
 print("🚀 Runner Started...")
@@ -218,6 +237,8 @@ while True:
         bots = list(bots_collection.find())
         active_tokens = []
 
+        # ================= START / STOP BOTS =================
+
         for b in bots:
 
             token = b.get("token")
@@ -226,11 +247,15 @@ while True:
             if not token:
                 continue
 
+            # ===== BOT SHOULD RUN =====
+
             if active:
 
                 active_tokens.append(token)
 
                 if token not in running_bots:
+
+                    print("🟢 Starting bot:", token)
 
                     threading.Thread(
                         target=start_user_bot,
@@ -238,23 +263,29 @@ while True:
                         daemon=True
                     ).start()
 
-                    print("🟢 Starting bot:", token)
+            # ===== BOT SHOULD STOP =====
 
             else:
 
-                # haddii admin remove sameeyo
                 if token in running_bots:
 
                     print("🔴 Stopping bot:", token)
 
                     try:
+
                         running_bots[token].stop_polling()
+
                     except:
                         pass
 
-                    del running_bots[token]
+                    try:
+                        del running_bots[token]
+                    except:
+                        pass
 
-        # haddii bot database ka laga tirtiro
+
+        # ================= REMOVE BOT =================
+
         for token in list(running_bots.keys()):
 
             if token not in active_tokens:
@@ -262,14 +293,21 @@ while True:
                 print("🛑 Bot removed:", token)
 
                 try:
+
                     running_bots[token].stop_polling()
+
                 except:
                     pass
 
-                del running_bots[token]
+                try:
+                    del running_bots[token]
+                except:
+                    pass
+
 
     except Exception as e:
 
-        print("Runner error:", e)
+        print("⚠ Runner error:", e)
 
+    # ===== LOOP DELAY =====
     time.sleep(20)
