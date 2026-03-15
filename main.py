@@ -319,6 +319,27 @@ def remove_bot_process(message):
         f"✅ @{username} removed and disabled"
     )
 
+# ================= STATS =================
+
+@bot.message_handler(commands=["stats"])
+def stats(message):
+
+    if message.from_user.id != ADMIN_ID:
+        return
+
+    total_users = users_collection.count_documents({})
+
+    text = f"""
+📊 Bot Statistics
+
+👤 Total Users: {total_users}
+"""
+
+    bot.send_message(
+        message.chat.id,
+        text
+    )
+
 # ================= VERIFY API =================
 
 @app.route("/verify")
