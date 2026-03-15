@@ -332,40 +332,202 @@ def verify_off(message):
 
 
 # ---------- BROADCAST ----------
+# ---------- BROADCAST SYSTEM ----------
 
-@bot.message_handler(func=lambda m:m.text=="📢 Broadcast")
-def broadcast(message):
+broadcast_data = {
+    "text": None,
+    "buttons": [],
+    "style": ""
+}
+
+broadcast_mode = False
+
+
+# ---------- OPEN BROADCAST ----------
+
+@bot.message_handler(func=lambda m: m.text == "📢 Broadcast")
+def broadcast_menu(message):
 
     global broadcast_mode
 
-    broadcast_mode=True
+    broadcast_mode = True
+    broadcast_data["buttons"] = []
 
     bot.send_message(
         message.chat.id,
-        "Send broadcast message"
+        "📢 Send broadcast text"
     )
 
 
-@bot.message_handler(func=lambda m:True)
-def broadcast_steps(message):
+# ---------- RECEIVE TEXT ----------
 
-    global broadcast_mode
+@bot.message_handler(func=lambda m: broadcast_mode and broadcast_data["text"] is None)
+def get_text(message):
 
-    if not broadcast_mode:
-        return
+    broadcast_data["text"] = message.text
+
+    kb = InlineKeyboardMarkup()
+
+    kb.add(
+        InlineKeyboardButton("➕ Add Inline", callback_data="add_inline")
+    )
+
+    kb.add(
+        InlineKeyboardButton("🎨 Color", callback_data="color")
+    )
+
+    kb.add(
+        InlineKeyboardButton("👀 Preview", callback_data="preview")
+    )
+
+    kb.add(
+        InlineKeyboardButton("📤 Send Broadcast", callback_data="send_bc")
+    )
+
+    bot.send_message(
+        message.chat.id,
+        "Message saved. Choose option:",
+        reply_markup=kb
+    )
+
+
+# ---------- ADD INLINE BUTTON ----------
+
+@bot.callback_query_handler(func=lambda c: c.data == "add_inline")
+def add_inline(call):
+
+    msg = bot.send_message(
+        call.message.chat.id,
+        "Send button text"
+    )
+
+    bot.register_next_step_handler(msg, inline_text)
+
+
+def inline_text(message):
 
     text = message.text
+
+    msg = bot.send_message(
+        message.chat.id,
+        "Send button URL"
+    )
+
+    bot.register_next_step_handler(msg, inline_url, text)
+
+
+def inline_url(message, text):
+
+    if len(broadcast_data["buttons"]) >= 5:
+
+        bot.send_message(
+            message.chat.id,
+            "❌ Max 5 buttons allowed"
+        )
+
+        return
+
+    broadcast_data["buttons"].append(
+        (text, message.text)
+    )
+
+    bot.send_message(
+        message.chat.id,
+        "✅ Button added"
+    )
+
+
+# ---------- COLOR STYLE ----------
+
+@bot.callback_query_handler(func=lambda c: c.data == "color")
+def color_menu(call):
+
+    kb = InlineKeyboardMarkup()
+
+    kb.add(
+        InlineKeyboardButton("🔴 Red", callback_data="style_red")
+    )
+
+    kb.add(
+        InlineKeyboardButton("🟢 Green", callback_data="style_green")
+    )
+
+    kb.add(
+        InlineKeyboardButton("🔵 Blue", callback_data="style_blue")
+    )
+
+    bot.send_message(
+        call.message.chat.id,
+        "Choose style",
+        reply_markup=kb
+    )
+
+
+@bot.callback_query_handler(func=lambda c: c.data.startswith("style"))
+def set_style(call):
+
+    if call.data == "style_red":
+        broadcast_data["style"] = "🔴"
+
+    if call.data == "style_green":
+        broadcast_data["style"] = "🟢"
+
+    if call.data == "style_blue":
+        broadcast_data["style"] = "🔵"
+
+    bot.send_message(
+        call.message.chat.id,
+        "✅ Style applied"
+    )
+
+
+# ---------- PREVIEW ----------
+
+@bot.callback_query_handler(func=lambda c: c.data == "preview")
+def preview(call):
+
+    text = f"{broadcast_data['style']} {broadcast_data['text']}"
+
+    kb = InlineKeyboardMarkup()
+
+    for b in broadcast_data["buttons"]:
+
+        kb.add(
+            InlineKeyboardButton(b[0], url=b[1])
+        )
+
+    bot.send_message(
+        call.message.chat.id,
+        text,
+        reply_markup=kb
+    )
+
+
+# ---------- SEND BROADCAST ----------
+
+@bot.callback_query_handler(func=lambda c: c.data == "send_bc")
+def send_broadcast(call):
 
     users = users_collection.find()
     bots = bots_collection.find()
 
-    sent=0
+    text = f"{broadcast_data['style']} {broadcast_data['text']}"
+
+    kb = InlineKeyboardMarkup()
+
+    for b in broadcast_data["buttons"]:
+
+        kb.add(
+            InlineKeyboardButton(b[0], url=b[1])
+        )
+
+    sent = 0
 
     for b in bots:
 
         try:
 
-            send_bot=telebot.TeleBot(b["token"])
+            send_bot = telebot.TeleBot(b["token"])
 
             for u in users:
 
@@ -373,10 +535,11 @@ def broadcast_steps(message):
 
                     send_bot.send_message(
                         u["user_id"],
-                        text
+                        text,
+                        reply_markup=kb
                     )
 
-                    sent+=1
+                    sent += 1
 
                 except:
                     pass
@@ -384,12 +547,13 @@ def broadcast_steps(message):
         except:
             pass
 
-    broadcast_mode=False
-
     bot.send_message(
-        message.chat.id,
-        f"📢 Broadcast sent via bots\nDelivered: {sent}"
+        call.message.chat.id,
+        f"📢 Broadcast sent\nDelivered: {sent}"
     )
+
+    broadcast_data["text"] = None
+    broadcast_data["buttons"] = []
 
 
 print("Admin Bot Running...")
