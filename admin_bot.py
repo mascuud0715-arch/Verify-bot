@@ -585,7 +585,6 @@ def send_broadcast(call):
 
     text = f"{broadcast_data['style']} {broadcast_data['text']}"
 
-    # buttons
     kb = InlineKeyboardMarkup()
 
     for b in broadcast_data["buttons"]:
@@ -597,9 +596,9 @@ def send_broadcast(call):
         )
 
     bots = list(bots_collection.find())
+    users = list(users_collection.find())
 
-    total_bots = 0
-    total_users = 0
+    bots_used = 0
     delivered = 0
 
     for b in bots:
@@ -608,20 +607,7 @@ def send_broadcast(call):
 
             send_bot = telebot.TeleBot(b["token"])
 
-            # users of this bot
-            users = list(
-                users_collection.find(
-                    {"bot": b["username"]}
-                )
-            )
-
-            bot_users = len(users)
-
-            if bot_users == 0:
-                continue
-
-            total_bots += 1
-            total_users += bot_users
+            bots_used += 1
 
             for u in users:
 
@@ -647,16 +633,11 @@ def send_broadcast(call):
         f"""
 📢 BROADCAST SENT
 
-🤖 Bots Used: {total_bots}
-
-👥 Total Users: {total_users}
-
+🤖 Bots Used: {bots_used}
+👥 Total Users: {len(users)}
 📬 Delivered: {delivered}
 """
     )
-
-    broadcast_data["text"] = None
-    broadcast_data["buttons"] = []
 
 
 # ==============================
