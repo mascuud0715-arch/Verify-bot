@@ -248,9 +248,26 @@ def download_tiktok(url):
 
         r = requests.get(api).json()
 
-        if r["code"] == 0:
+        if r["code"] != 0:
+            return None
 
-            return r["data"]["play"]
+        data = r["data"]
+
+        # VIDEO
+        if data.get("play"):
+
+            return {
+                "type": "video",
+                "media": data["play"]
+            }
+
+        # PHOTO SLIDES
+        if data.get("images"):
+
+            return {
+                "type": "photo",
+                "media": data["images"]
+            }
 
     except:
         pass
@@ -258,35 +275,67 @@ def download_tiktok(url):
     return None
 
 # -------- HANDLE LINKS --------
-
 @bot.message_handler(func=lambda m: "tiktok.com" in m.text)
 def handle_tiktok(message):
 
     uid = message.from_user.id
-
-    if not force_join(message.chat.id,uid):
-        return
+    url = message.text
 
     bot.send_message(
         message.chat.id,
-        "⏳ Downloading video..."
+        "⏳ Downloading..."
     )
 
-    video = download_tiktok(message.text)
+    result = download_tiktok(url)
 
-    if not video:
+    if not result:
 
         bot.send_message(
             message.chat.id,
             "❌ Download failed"
         )
+
         return
 
-    bot.send_video(
+
+    bot_username = bot.get_me().username
+
+
+    # VIDEO
+    if result["type"] == "video":
+
+        bot.send_video(
+            message.chat.id,
+            result["media"],
+            caption=f"Via @{bot_username}"
+        )
+
+        downloads_collection.insert_one({
+            "type":"tiktok_video"
+        })
+
+
+    # PHOTOS
+    elif result["type"] == "photo":
+
+        for img in result["media"]:
+
+            bot.send_photo(
+                message.chat.id,
+                img,
+                caption=f"Via @{bot_username}"
+            )
+
+        downloads_collection.insert_one({
+            "type":"photo"
+        })
+
+
+    bot.send_message(
         message.chat.id,
-        video,
-        caption="✅ Video downloaded"
-    )
+        "Created: @Verify_yourbot"
+        )
+
 
 # -------- RUN --------
 
