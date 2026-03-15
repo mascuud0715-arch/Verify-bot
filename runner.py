@@ -157,8 +157,6 @@ def process_download(bot, chat_id, uid, url):
 
     result = download_tiktok(url)
 
-    print("Download result:", result)
-
     if not result:
         bot.send_message(chat_id, "❌ Download failed")
         return
@@ -166,8 +164,6 @@ def process_download(bot, chat_id, uid, url):
     bot_username = bot.get_me().username
 
     try:
-
-        # -------- VIDEO --------
 
         if result["type"] == "video":
 
@@ -188,13 +184,6 @@ def process_download(bot, chat_id, uid, url):
                 "Created: @Verify_yourbot"
             )
 
-            downloads_collection.insert_one({
-                "type": "tiktok_video",
-                "user": uid
-            })
-
-        # -------- PHOTO SLIDESHOW --------
-
         elif result["type"] == "photo":
 
             for img in result["media"]:
@@ -211,11 +200,6 @@ def process_download(bot, chat_id, uid, url):
                 f"Via @{bot_username}\n\nCreated: @Verify_yourbot"
             )
 
-            downloads_collection.insert_one({
-                "type": "tiktok_photo",
-                "user": uid
-            })
-
     except Exception as e:
 
         print("SEND MEDIA ERROR:", e)
@@ -229,14 +213,9 @@ def process_download(bot, chat_id, uid, url):
 
 def start_user_bot(token):
 
-    if token in running_bots:
-        return
-
     try:
 
         bot = telebot.TeleBot(token)
-
-        # -------- START --------
 
         @bot.message_handler(commands=["start"])
         def start(message):
@@ -274,72 +253,11 @@ Create your own downloader:
 @Verify_yourbot"""
             )
 
-        # -------- CONFIRM JOIN --------
-
-        @bot.callback_query_handler(func=lambda call: call.data == "confirm_join")
-        def confirm(call):
-
-            uid = call.from_user.id
-
-            r = verify_join(uid)
-
-            if r.get("status") != "joined":
-
-                bot.answer_callback_query(
-                    call.id,
-                    "❌ Join all channels first",
-                    show_alert=True
-                )
-                return
-
-            bot.answer_callback_query(
-                call.id,
-                "✅ Verification successful"
-            )
-
-            if uid in pending_links:
-
-                url = pending_links.pop(uid)
-
-                process_download(
-                    bot,
-                    call.message.chat.id,
-                    uid,
-                    url
-                )
-
-            else:
-
-                bot.edit_message_text(
-                    "✅ Verification successful\n\nSend TikTok link",
-                    call.message.chat.id,
-                    call.message.message_id
-                )
-
-        # -------- LINK HANDLER --------
-
         @bot.message_handler(func=lambda m: m.text and "tiktok.com" in m.text)
         def tiktok(message):
 
-            if not bots_active():
-
-                bot.send_message(
-                    message.chat.id,
-                    "⚠️ Bots are temporarily disabled"
-                )
-                return
-
             uid = message.from_user.id
             url = message.text
-
-            r = verify_join(uid)
-
-            if r.get("status") != "joined":
-
-                pending_links[uid] = url
-
-                send_force_join(bot, message.chat.id)
-                return
 
             process_download(
                 bot,
@@ -347,8 +265,6 @@ Create your own downloader:
                 uid,
                 url
             )
-
-        running_bots[token] = bot
 
         print("✅ Bot Started")
 
@@ -358,27 +274,6 @@ Create your own downloader:
 
         print("❌ Bot start error:", e)
 
-# -------- LOAD BOTS --------
-
-def load_all_bots():
-
-    bots = bots_collection.find()
-
-    for b in bots:
-
-        token = b.get("token")
-
-        if not token:
-            continue
-
-        if token not in running_bots:
-
-            threading.Thread(
-                target=start_user_bot,
-                args=(token,),
-                daemon=True
-            ).start()
-
 # -------- RUNNER LOOP --------
 
 print("🚀 Runner Started...")
@@ -386,9 +281,56 @@ print("🚀 Runner Started...")
 while True:
 
     try:
-        load_all_bots()
+
+        bots = list(bots_collection.find())
+
+        active_tokens = []
+
+        for b in bots:
+
+            token = b.get("token")
+            active = b.get("active", True)
+
+            if not token:
+                continue
+
+            if active:
+
+                active_tokens.append(token)
+
+                if token not in running_bots:
+
+                    t = threading.Thread(
+                        target=start_user_bot,
+                        args=(token,),
+                        daemon=True
+                    )
+
+                    t.start()
+
+                    running_bots[token] = True
+
+                    print("🟢 Bot Started:", token)
+
+            else:
+
+                if token in running_bots:
+
+                    print("🔴 Bot Removed:", token)
+
+                    del running_bots[token]
+
+        # remove bots not in database
+        for token in list(running_bots.keys()):
+
+            if token not in active_tokens:
+
+                print("🛑 Bot Stopped:", token)
+
+                del running_bots[token]
 
     except Exception as e:
+
         print("Runner error:", e)
 
     time.sleep(20)
