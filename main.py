@@ -4,12 +4,14 @@ import requests
 from telebot.types import ReplyKeyboardMarkup
 from pymongo import MongoClient
 
+# -------- ENV --------
+
 TOKEN = os.getenv("MAIN_BOT_TOKEN")
 MONGO_URL = os.getenv("MONGO_URL")
 
 bot = telebot.TeleBot(TOKEN)
 
-# -------- MONGODB CONNECTION --------
+# -------- MONGODB --------
 
 client = MongoClient(MONGO_URL)
 
@@ -17,6 +19,8 @@ db = client["verify_system"]
 
 bots_collection = db["bots"]
 users_collection = db["users"]
+
+# -------- USER STATE --------
 
 user_state = {}
 
@@ -49,6 +53,7 @@ def get_bot_username(token):
 
     return None
 
+
 # -------- START --------
 
 @bot.message_handler(commands=["start"])
@@ -69,6 +74,7 @@ def start(message):
         reply_markup=kb
     )
 
+
 # -------- ADD BOT --------
 
 @bot.message_handler(func=lambda m: m.text == "➕ Add Bot")
@@ -80,6 +86,7 @@ def add_bot(message):
         message.chat.id,
         "📩 Send your Bot Token"
     )
+
 
 # -------- MY BOTS --------
 
@@ -103,7 +110,11 @@ def my_bots(message):
 
         text = "❌ You don't have bots added."
 
-    bot.send_message(message.chat.id, text)
+    bot.send_message(
+        message.chat.id,
+        text
+    )
+
 
 # -------- RECEIVE TOKEN --------
 
@@ -111,6 +122,7 @@ def my_bots(message):
 def receive_token(message):
 
     uid = message.from_user.id
+
     token = message.text.strip()
 
     username = get_bot_username(token)
@@ -123,6 +135,7 @@ def receive_token(message):
         )
         return
 
+
     if bots_collection.find_one({"token": token}):
 
         bot.send_message(
@@ -130,6 +143,7 @@ def receive_token(message):
             "⚠️ Bot already added"
         )
         return
+
 
     bots_collection.insert_one({
 
@@ -143,8 +157,9 @@ def receive_token(message):
 
     bot.send_message(
         message.chat.id,
-        f"✅ Bot Added Successfully\n\n{username}"
+        f"✅ Bot Added Successfully\n\n{username}\n\nBot will start automatically."
     )
+
 
 # -------- RUN --------
 
