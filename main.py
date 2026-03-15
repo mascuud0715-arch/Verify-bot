@@ -1,59 +1,36 @@
 import telebot
-import json
-import requests
 import os
+import requests
 from telebot.types import ReplyKeyboardMarkup
+from pymongo import MongoClient
 
 TOKEN = os.getenv("MAIN_BOT_TOKEN")
+MONGO_URL = os.getenv("MONGO_URL")
 
 bot = telebot.TeleBot(TOKEN)
 
+# -------- MONGODB CONNECTION --------
+
+client = MongoClient(MONGO_URL)
+
+db = client["verify_system"]
+
+bots_collection = db["bots"]
+users_collection = db["users"]
+
 user_state = {}
 
-# ---------------- LOAD FILES ----------------
-
-def load_bots():
-
-    try:
-        with open("bots.json") as f:
-            return json.load(f)
-
-    except:
-        return []
-
-def save_bots(data):
-
-    with open("bots.json","w") as f:
-        json.dump(data,f,indent=4)
-
-
-def load_users():
-
-    try:
-        with open("users.json") as f:
-            return json.load(f)
-
-    except:
-        return []
-
-def save_users(data):
-
-    with open("users.json","w") as f:
-        json.dump(data,f,indent=4)
-
-# ---------------- SAVE USER ----------------
+# -------- SAVE USER --------
 
 def save_user(uid):
 
-    users = load_users()
+    users_collection.update_one(
+        {"user_id": uid},
+        {"$set": {"user_id": uid}},
+        upsert=True
+    )
 
-    if uid not in users:
-
-        users.append(uid)
-
-        save_users(users)
-
-# ---------------- GET BOT USERNAME ----------------
+# -------- GET BOT USERNAME --------
 
 def get_bot_username(token):
 
@@ -67,15 +44,12 @@ def get_bot_username(token):
 
             return "@" + r["result"]["username"]
 
-        else:
-            return None
-
     except:
+        pass
 
-        return None
+    return None
 
-
-# ---------------- START ----------------
+# -------- START --------
 
 @bot.message_handler(commands=["start"])
 def start(message):
@@ -95,8 +69,7 @@ def start(message):
         reply_markup=kb
     )
 
-
-# ---------------- ADD BOT ----------------
+# -------- ADD BOT --------
 
 @bot.message_handler(func=lambda m: m.text == "➕ Add Bot")
 def add_bot(message):
@@ -108,15 +81,14 @@ def add_bot(message):
         "📩 Send your Bot Token"
     )
 
-
-# ---------------- MY BOTS ----------------
+# -------- MY BOTS --------
 
 @bot.message_handler(func=lambda m: m.text == "🤖 My Bots")
 def my_bots(message):
 
     uid = message.from_user.id
 
-    bots = load_bots()
+    bots = bots_collection.find({"owner": uid})
 
     text = "🤖 Your Bots\n\n"
 
@@ -124,29 +96,21 @@ def my_bots(message):
 
     for b in bots:
 
-        if b["owner"] == uid:
-
-            text += f"{b['username']}\n"
-
-            found = True
+        text += f"{b['username']}\n"
+        found = True
 
     if not found:
 
         text = "❌ You don't have bots added."
 
-    bot.send_message(
-        message.chat.id,
-        text
-    )
+    bot.send_message(message.chat.id, text)
 
-
-# ---------------- RECEIVE TOKEN ----------------
+# -------- RECEIVE TOKEN --------
 
 @bot.message_handler(func=lambda m: m.from_user.id in user_state)
 def receive_token(message):
 
     uid = message.from_user.id
-
     token = message.text.strip()
 
     username = get_bot_username(token)
@@ -157,25 +121,17 @@ def receive_token(message):
             message.chat.id,
             "❌ Invalid Bot Token"
         )
-
         return
 
+    if bots_collection.find_one({"token": token}):
 
-    bots = load_bots()
+        bot.send_message(
+            message.chat.id,
+            "⚠️ Bot already added"
+        )
+        return
 
-    for b in bots:
-
-        if b["token"] == token:
-
-            bot.send_message(
-                message.chat.id,
-                "⚠️ Bot already added"
-            )
-
-            return
-
-
-    bots.append({
+    bots_collection.insert_one({
 
         "owner": uid,
         "token": token,
@@ -183,21 +139,14 @@ def receive_token(message):
 
     })
 
-
-    save_bots(bots)
-
     del user_state[uid]
 
     bot.send_message(
-
         message.chat.id,
-
         f"✅ Bot Added Successfully\n\n{username}"
-
     )
 
-
-# ---------------- RUN ----------------
+# -------- RUN --------
 
 print("Main Bot Running...")
 
