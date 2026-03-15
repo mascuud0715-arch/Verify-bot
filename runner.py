@@ -68,7 +68,7 @@ def downloader_enabled():
 
     return data.get("downloader_status", True)
 
-# ================= VERIFY CODE =================
+# ================= VERIFY USER =================
 
 def verify_user(uid):
 
@@ -85,18 +85,6 @@ def verify_user(uid):
         return False
 
     return True
-
-# CHECK EXPIRE
-if data.get("expire",0) < time.time():
-
-    bot.send_message(
-        message.chat.id,
-        "❌ Code expired"
-    )
-
-    codes_collection.delete_one({"code":code})
-
-    return
 
 # ================= TIKTOK API =================
 
@@ -122,7 +110,7 @@ def download_tiktok(url):
 
             d = data["data"]
 
-            # PHOTO FIRST (FIX BLACK VIDEO)
+            # PHOTO SLIDESHOW
             if d.get("images"):
 
                 return {
@@ -198,7 +186,6 @@ def process_download(bot, chat_id, uid, url):
 
     try:
 
-        # CHECK DOWNLOADER STATUS
         if not downloader_enabled():
 
             bot.send_message(
@@ -207,7 +194,6 @@ def process_download(bot, chat_id, uid, url):
             )
             return
 
-        # CHECK VERIFY
         if not verify_user(uid):
 
             bot.send_message(
@@ -227,8 +213,7 @@ def process_download(bot, chat_id, uid, url):
 
         bot_username = bot.get_me().username
 
-        # ================= VIDEO =================
-
+        # VIDEO
         if result["type"] == "video":
 
             path = download_video(result["media"])
@@ -249,18 +234,12 @@ def process_download(bot, chat_id, uid, url):
 
             os.remove(path)
 
-            bot.send_message(
-                chat_id,
-                "Created: @Verify_yourbot"
-            )
-
             downloads_collection.insert_one({
                 "type": "video",
                 "user": uid
             })
 
-        # ================= PHOTO =================
-
+        # PHOTO SLIDESHOW
         elif result["type"] == "photo":
 
             for img in result["media"]:
@@ -279,11 +258,6 @@ def process_download(bot, chat_id, uid, url):
 
                 os.remove(path)
 
-            bot.send_message(
-                chat_id,
-                f"Via @{bot_username}\n\nCreated: @Verify_yourbot"
-            )
-
             downloads_collection.insert_one({
                 "type": "photo",
                 "user": uid
@@ -294,7 +268,6 @@ def process_download(bot, chat_id, uid, url):
         print("Process error:", e)
 
         bot.send_message(chat_id, "❌ Download error")
-
 
 # ================= START USER BOT =================
 
@@ -357,6 +330,18 @@ Get your code from:
                 )
                 return
 
+            # CHECK EXPIRE
+            if data.get("expire", 0) < time.time():
+
+                bot.send_message(
+                    message.chat.id,
+                    "❌ Code expired"
+                )
+
+                codes_collection.delete_one({"code": code})
+
+                return
+
             if data["user_id"] != uid:
 
                 bot.send_message(
@@ -364,6 +349,12 @@ Get your code from:
                     "❌ This code is not yours"
                 )
                 return
+
+            # SAVE VERIFIED USER
+            codes_collection.update_one(
+                {"user_id": uid},
+                {"$set": {"verified": True}}
+            )
 
             bot.send_message(
                 message.chat.id,
