@@ -271,8 +271,13 @@ def verify():
     user_id = request.args.get("user_id")
 
     if not user_id:
-
         return jsonify({"status":"error"})
+
+    active_channels = channels_collection.count_documents({"active": True})
+
+    # haddii channels close yihiin
+    if active_channels == 0:
+        return jsonify({"status":"joined"})
 
     not_joined = check_channels(user_id)
 
