@@ -15,7 +15,6 @@ VERIFY_API = os.getenv("VERIFY_API")
 # -------- MONGODB --------
 
 client = MongoClient(MONGO_URL)
-
 db = client["verify_system"]
 
 bots_collection = db["bots"]
@@ -168,8 +167,6 @@ def process_download(bot, chat_id, uid, url):
 
     try:
 
-        # -------- VIDEO --------
-
         if result["type"] == "video":
 
             video = requests.get(result["media"]).content
@@ -192,8 +189,6 @@ Created: @Verify_yourbot"""
                 "type": "tiktok_video",
                 "user": uid
             })
-
-        # -------- PHOTOS --------
 
         elif result["type"] == "photo":
 
@@ -234,30 +229,27 @@ def start_user_bot(token):
         bot = telebot.TeleBot(token)
 
         # -------- START --------
-        # -------- START --------
 
-@bot.message_handler(commands=["start"])
-def start(message):
+        @bot.message_handler(commands=["start"])
+        def start(message):
 
-    if not bots_active():
+            if not bots_active():
 
-        bot.send_message(
-            message.chat.id,
-            "⚠️ Bots are temporarily disabled"
-        )
-        return
+                bot.send_message(
+                    message.chat.id,
+                    "⚠️ Bots are temporarily disabled"
+                )
+                return
 
-    uid = message.from_user.id
-    save_user(uid)
+            uid = message.from_user.id
+            save_user(uid)
 
-    # Force join haddii channels jiraan
-    if send_force_join(bot, message.chat.id):
-        return
+            if send_force_join(bot, message.chat.id):
+                return
 
-    # Start message
-    bot.send_message(
-        message.chat.id,
-        """👋 Welcome to TikTok Downloader Bot
+            bot.send_message(
+                message.chat.id,
+"""👋 Welcome to TikTok Downloader Bot
 
 📥 Send any TikTok link and I will download it instantly.
 
@@ -272,11 +264,11 @@ Just send a TikTok link to begin.
 
 Create your own downloader:
 @Verify_yourbot"""
-    )
+            )
 
         # -------- CONFIRM JOIN --------
 
-        @bot.callback_query_handler(func=lambda call:call.data=="confirm_join")
+        @bot.callback_query_handler(func=lambda call: call.data=="confirm_join")
         def confirm(call):
 
             uid = call.from_user.id
@@ -318,7 +310,7 @@ Create your own downloader:
 
         # -------- LINK HANDLER --------
 
-        @bot.message_handler(func=lambda m:m.text and "tiktok.com" in m.text)
+        @bot.message_handler(func=lambda m: m.text and "tiktok.com" in m.text)
         def tiktok(message):
 
             if not bots_active():
@@ -338,7 +330,7 @@ Create your own downloader:
 
                 pending_links[uid] = url
 
-                send_force_join(bot,message.chat.id)
+                send_force_join(bot, message.chat.id)
                 return
 
             process_download(
