@@ -25,49 +25,59 @@ def save_users(users):
 def start(msg):
 
     kb = InlineKeyboardMarkup()
-    kb.add(InlineKeyboardButton("✅ Verify", callback_data="verify"))
+
+    kb.add(
+        InlineKeyboardButton(
+            "✅ Verify",
+            callback_data="verify"
+        )
+    )
 
     bot.send_message(
         msg.chat.id,
-        "Ku dhufo Verify si aad u verify garayso.",
+        "Riix Verify si aad u verify garayso.",
         reply_markup=kb
     )
 
-@bot.callback_query_handler(func=lambda c: True)
-def callbacks(call):
+@bot.callback_query_handler(func=lambda c:True)
+def verify(call):
 
-    if call.data == "verify":
+    if call.data=="verify":
 
-        code = random.randint(1000,9999)
+        code=random.randint(1000,9999)
 
-        codes[call.from_user.id] = code
+        codes[call.from_user.id]=code
 
         bot.send_message(
             call.message.chat.id,
             f"Dir code-kan:\n\n{code}"
         )
 
-@bot.message_handler(func=lambda m: True)
+@bot.message_handler(func=lambda m:True)
 def check(msg):
 
     if msg.from_user.id in codes:
 
-        if msg.text == str(codes[msg.from_user.id]):
+        if msg.text==str(codes[msg.from_user.id]):
 
-            users = load_users()
+            users=load_users()
 
             if msg.from_user.id not in users:
                 users.append(msg.from_user.id)
                 save_users(users)
 
-            bot.send_message(msg.chat.id,"✅ Waad verify garaysay")
+            bot.send_message(
+                msg.chat.id,
+                "✅ Verification waa guulaystay"
+            )
 
             del codes[msg.from_user.id]
 
         else:
 
-            bot.send_message(msg.chat.id,"❌ Code khaldan")
-
-print("Verify bot running...")
+            bot.send_message(
+                msg.chat.id,
+                "❌ Code khaldan"
+            )
 
 bot.infinity_polling()
