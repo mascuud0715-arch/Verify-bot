@@ -2,8 +2,9 @@ import telebot
 import json
 import threading
 import time
+from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 
-running = {}
+running_bots = {}
 
 def load_bots():
     try:
@@ -17,22 +18,36 @@ def start_bot(token):
     bot = telebot.TeleBot(token)
 
     @bot.message_handler(commands=['start'])
-    def start(msg):
-        bot.send_message(msg.chat.id,"Bot Working ✅")
+    def start(message):
 
-    print("Started bot:",token)
+        kb = InlineKeyboardMarkup()
+        kb.add(
+            InlineKeyboardButton(
+                "VERIFY",
+                url="https://t.me/Verifyd_bot"
+            )
+        )
+
+        bot.send_message(
+            message.chat.id,
+            "You Can't Use this Bot before verify",
+            reply_markup=kb
+        )
+
+    print("Bot started:", token)
 
     bot.infinity_polling()
 
-def run_thread(token):
+def run_bot(token):
 
-    if token in running:
+    if token in running_bots:
         return
 
     t = threading.Thread(target=start_bot,args=(token,))
     t.start()
 
-    running[token] = True
+    running_bots[token] = True
+
 
 while True:
 
@@ -42,6 +57,6 @@ while True:
 
         token = b["token"]
 
-        run_thread(token)
+        run_bot(token)
 
-    time.sleep(15)
+    time.sleep(10)
