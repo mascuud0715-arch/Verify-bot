@@ -1,9 +1,19 @@
 import telebot
 import os
-from telebot.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
+
+from telebot.types import (
+    ReplyKeyboardMarkup,
+    KeyboardButton,
+    InlineKeyboardMarkup,
+    InlineKeyboardButton
+)
+
 from pymongo import MongoClient
 
-# ---------- ENV ----------
+
+# ==============================
+# ENV
+# ==============================
 
 TOKEN = os.getenv("ADMIN_BOT_TOKEN")
 ADMIN_ID = int(os.getenv("ADMIN_ID"))
@@ -11,7 +21,10 @@ MONGO_URL = os.getenv("MONGO_URL")
 
 bot = telebot.TeleBot(TOKEN)
 
-# ---------- DATABASE ----------
+
+# ==============================
+# DATABASE
+# ==============================
 
 client = MongoClient(MONGO_URL)
 
@@ -23,11 +36,23 @@ channels_collection = db["channels"]
 downloads_collection = db["downloads"]
 system_collection = db["system"]
 
-# ---------- STATES ----------
 
-broadcast_mode=False
+# ==============================
+# STATES
+# ==============================
 
-# ---------- MENU ----------
+broadcast_mode = False
+
+broadcast_data = {
+    "text": None,
+    "buttons": [],
+    "style": ""
+}
+
+
+# ==============================
+# ADMIN MENU
+# ==============================
 
 def admin_menu():
 
@@ -68,14 +93,19 @@ def admin_menu():
     return kb
 
 
-# ---------- START ----------
+# ==============================
+# START
+# ==============================
 
 @bot.message_handler(commands=["start"])
 def start(message):
 
     if message.from_user.id != ADMIN_ID:
 
-        bot.send_message(message.chat.id,"❌ Not Allowed")
+        bot.send_message(
+            message.chat.id,
+            "❌ Not Allowed"
+        )
 
         return
 
@@ -86,9 +116,11 @@ def start(message):
     )
 
 
-# ---------- STATS ----------
+# ==============================
+# SYSTEM STATS
+# ==============================
 
-@bot.message_handler(func=lambda m:m.text=="📊 Stats")
+@bot.message_handler(func=lambda m: m.text == "📊 Stats")
 def stats(message):
 
     bots = bots_collection.count_documents({})
@@ -105,9 +137,11 @@ def stats(message):
     )
 
 
-# ---------- MEDIA STATS ----------
+# ==============================
+# MEDIA STATS
+# ==============================
 
-@bot.message_handler(func=lambda m:m.text=="📊 Media Stats")
+@bot.message_handler(func=lambda m: m.text == "📊 Media Stats")
 def media_stats(message):
 
     tiktok = downloads_collection.count_documents({"type":"tiktok_video"})
@@ -126,19 +160,27 @@ def media_stats(message):
     )
 
 
-# ---------- BOTS PANEL ----------
+# ==============================
+# BOTS PANEL
+# ==============================
 
-@bot.message_handler(func=lambda m:m.text=="🤖 Bots")
+@bot.message_handler(func=lambda m: m.text == "🤖 Bots")
 def bots_panel(message):
 
-    kb=InlineKeyboardMarkup()
+    kb = InlineKeyboardMarkup()
 
     kb.add(
-        InlineKeyboardButton("👤 Usernames",callback_data="bot_usernames")
+        InlineKeyboardButton(
+            "👤 Usernames",
+            callback_data="bot_usernames"
+        )
     )
 
     kb.add(
-        InlineKeyboardButton("🔑 API Tokens",callback_data="bot_api")
+        InlineKeyboardButton(
+            "🔑 API Tokens",
+            callback_data="bot_api"
+        )
     )
 
     bot.send_message(
@@ -148,20 +190,20 @@ def bots_panel(message):
     )
 
 
-@bot.callback_query_handler(func=lambda call:call.data=="bot_usernames")
+@bot.callback_query_handler(func=lambda call: call.data == "bot_usernames")
 def bot_usernames(call):
 
-    bots=bots_collection.find()
+    bots = bots_collection.find()
 
-    text="🤖 Bots Usernames\n\n"
+    text = "🤖 Bots Usernames\n\n"
 
-    i=1
+    i = 1
 
     for b in bots:
 
-        text+=f"{i}: {b.get('username')}\n"
+        text += f"{i}: {b.get('username')}\n"
 
-        i+=1
+        i += 1
 
     bot.edit_message_text(
         text,
@@ -170,20 +212,20 @@ def bot_usernames(call):
     )
 
 
-@bot.callback_query_handler(func=lambda call:call.data=="bot_api")
+@bot.callback_query_handler(func=lambda call: call.data == "bot_api")
 def bot_api(call):
 
-    bots=bots_collection.find()
+    bots = bots_collection.find()
 
-    text="🔑 Bots API\n\n"
+    text = "🔑 Bots API\n\n"
 
-    i=1
+    i = 1
 
     for b in bots:
 
-        text+=f"{i}: {b.get('token')}\n\n"
+        text += f"{i}: {b.get('token')}\n\n"
 
-        i+=1
+        i += 1
 
     bot.edit_message_text(
         text,
@@ -192,12 +234,16 @@ def bot_api(call):
     )
 
 
-# ---------- ADD CHANNEL ----------
+# ==============================
+# ADD CHANNEL
+# ==============================
 
-@bot.message_handler(func=lambda m:m.text=="➕ Add Channel")
+@bot.message_handler(func=lambda m: m.text == "➕ Add Channel")
 def add_channel(message):
 
-    total = channels_collection.count_documents({"active":True})
+    total = channels_collection.count_documents(
+        {"active": True}
+    )
 
     if total >= 5:
 
@@ -205,6 +251,7 @@ def add_channel(message):
             message.chat.id,
             "❌ Maximum 5 channels allowed"
         )
+
         return
 
     bot.send_message(
@@ -212,7 +259,10 @@ def add_channel(message):
         "Send channel username\nExample:\n@channel"
     )
 
-    bot.register_next_step_handler(message,save_channel)
+    bot.register_next_step_handler(
+        message,
+        save_channel
+    )
 
 
 def save_channel(message):
@@ -220,8 +270,13 @@ def save_channel(message):
     channel = message.text.strip()
 
     channels_collection.update_one(
-        {"username":channel},
-        {"$set":{"username":channel,"active":True}},
+        {"username": channel},
+        {
+            "$set":{
+                "username": channel,
+                "active": True
+            }
+        },
         upsert=True
     )
 
@@ -231,23 +286,31 @@ def save_channel(message):
     )
 
 
-# ---------- CHANNEL LIST ----------
+# ==============================
+# CHANNEL LIST
+# ==============================
 
-@bot.message_handler(func=lambda m:m.text=="📡 Channels")
+@bot.message_handler(func=lambda m: m.text == "📡 Channels")
 def channels(message):
 
-    channels=channels_collection.find({"active":True})
+    channels = channels_collection.find(
+        {"active": True}
+    )
 
-    text="📡 Force Join Channels\n\n"
+    text = "📡 Force Join Channels\n\n"
 
     for c in channels:
 
-        text+=c["username"]+"\n"
+        text += c["username"] + "\n"
 
-    bot.send_message(message.chat.id,text)
+    bot.send_message(
+        message.chat.id,
+        text
+    )
 
-
-# ---------- CLOSE CHANNELS ----------
+# ==============================
+# CLOSE CHANNELS
+# ==============================
 
 @bot.message_handler(func=lambda m:m.text=="❌ Close Channels")
 def close_channels(message):
@@ -263,7 +326,9 @@ def close_channels(message):
     )
 
 
-# ---------- CLOSE BOTS ----------
+# ==============================
+# CLOSE BOTS
+# ==============================
 
 @bot.message_handler(func=lambda m:m.text=="🚫 Close Bots")
 def close_bots(message):
@@ -280,7 +345,9 @@ def close_bots(message):
     )
 
 
-# ---------- OPEN BOTS ----------
+# ==============================
+# OPEN BOTS
+# ==============================
 
 @bot.message_handler(func=lambda m:m.text=="✅ Open Bots")
 def open_bots(message):
@@ -297,7 +364,9 @@ def open_bots(message):
     )
 
 
-# ---------- VERIFY ON ----------
+# ==============================
+# VERIFY ON
+# ==============================
 
 @bot.message_handler(func=lambda m:m.text=="🟢 Verify ON")
 def verify_on(message):
@@ -314,7 +383,9 @@ def verify_on(message):
     )
 
 
-# ---------- VERIFY OFF ----------
+# ==============================
+# VERIFY OFF
+# ==============================
 
 @bot.message_handler(func=lambda m:m.text=="🔴 Verify OFF")
 def verify_off(message):
@@ -331,27 +402,18 @@ def verify_off(message):
     )
 
 
-# ---------- BROADCAST ----------
-# ---------- BROADCAST SYSTEM ----------
+# ==============================
+# BROADCAST MENU
+# ==============================
 
-broadcast_data = {
-    "text": None,
-    "buttons": [],
-    "style": ""
-}
-
-broadcast_mode = False
-
-
-# ---------- OPEN BROADCAST ----------
-
-@bot.message_handler(func=lambda m: m.text == "📢 Broadcast")
+@bot.message_handler(func=lambda m:m.text=="📢 Broadcast")
 def broadcast_menu(message):
 
     global broadcast_mode
 
-    broadcast_mode = True
-    broadcast_data["buttons"] = []
+    broadcast_mode=True
+    broadcast_data["text"]=None
+    broadcast_data["buttons"]=[]
 
     bot.send_message(
         message.chat.id,
@@ -359,29 +421,31 @@ def broadcast_menu(message):
     )
 
 
-# ---------- RECEIVE TEXT ----------
+# ==============================
+# RECEIVE TEXT
+# ==============================
 
-@bot.message_handler(func=lambda m: broadcast_mode and broadcast_data["text"] is None)
+@bot.message_handler(func=lambda m:broadcast_mode and broadcast_data["text"] is None)
 def get_text(message):
 
-    broadcast_data["text"] = message.text
+    broadcast_data["text"]=message.text
 
-    kb = InlineKeyboardMarkup()
+    kb=InlineKeyboardMarkup()
 
     kb.add(
-        InlineKeyboardButton("➕ Add Inline", callback_data="add_inline")
+        InlineKeyboardButton("➕ Add Inline",callback_data="add_inline")
     )
 
     kb.add(
-        InlineKeyboardButton("🎨 Color", callback_data="color")
+        InlineKeyboardButton("🎨 Color",callback_data="color")
     )
 
     kb.add(
-        InlineKeyboardButton("👀 Preview", callback_data="preview")
+        InlineKeyboardButton("👀 Preview",callback_data="preview")
     )
 
     kb.add(
-        InlineKeyboardButton("📤 Send Broadcast", callback_data="send_bc")
+        InlineKeyboardButton("📤 Send Broadcast",callback_data="send_bc")
     )
 
     bot.send_message(
@@ -391,34 +455,36 @@ def get_text(message):
     )
 
 
-# ---------- ADD INLINE BUTTON ----------
+# ==============================
+# ADD INLINE BUTTON
+# ==============================
 
-@bot.callback_query_handler(func=lambda c: c.data == "add_inline")
+@bot.callback_query_handler(func=lambda c:c.data=="add_inline")
 def add_inline(call):
 
-    msg = bot.send_message(
+    msg=bot.send_message(
         call.message.chat.id,
         "Send button text"
     )
 
-    bot.register_next_step_handler(msg, inline_text)
+    bot.register_next_step_handler(msg,inline_text)
 
 
 def inline_text(message):
 
-    text = message.text
+    text=message.text
 
-    msg = bot.send_message(
+    msg=bot.send_message(
         message.chat.id,
         "Send button URL"
     )
 
-    bot.register_next_step_handler(msg, inline_url, text)
+    bot.register_next_step_handler(msg,inline_url,text)
 
 
-def inline_url(message, text):
+def inline_url(message,text):
 
-    if len(broadcast_data["buttons"]) >= 5:
+    if len(broadcast_data["buttons"])>=5:
 
         bot.send_message(
             message.chat.id,
@@ -428,7 +494,7 @@ def inline_url(message, text):
         return
 
     broadcast_data["buttons"].append(
-        (text, message.text)
+        (text,message.text)
     )
 
     bot.send_message(
@@ -437,23 +503,25 @@ def inline_url(message, text):
     )
 
 
-# ---------- COLOR STYLE ----------
+# ==============================
+# COLOR STYLE
+# ==============================
 
-@bot.callback_query_handler(func=lambda c: c.data == "color")
+@bot.callback_query_handler(func=lambda c:c.data=="color")
 def color_menu(call):
 
-    kb = InlineKeyboardMarkup()
+    kb=InlineKeyboardMarkup()
 
     kb.add(
-        InlineKeyboardButton("🔴 Red", callback_data="style_red")
+        InlineKeyboardButton("🔴 Red",callback_data="style_red")
     )
 
     kb.add(
-        InlineKeyboardButton("🟢 Green", callback_data="style_green")
+        InlineKeyboardButton("🟢 Green",callback_data="style_green")
     )
 
     kb.add(
-        InlineKeyboardButton("🔵 Blue", callback_data="style_blue")
+        InlineKeyboardButton("🔵 Blue",callback_data="style_blue")
     )
 
     bot.send_message(
@@ -463,17 +531,17 @@ def color_menu(call):
     )
 
 
-@bot.callback_query_handler(func=lambda c: c.data.startswith("style"))
+@bot.callback_query_handler(func=lambda c:c.data.startswith("style"))
 def set_style(call):
 
-    if call.data == "style_red":
-        broadcast_data["style"] = "🔴"
+    if call.data=="style_red":
+        broadcast_data["style"]="🔴"
 
-    if call.data == "style_green":
-        broadcast_data["style"] = "🟢"
+    if call.data=="style_green":
+        broadcast_data["style"]="🟢"
 
-    if call.data == "style_blue":
-        broadcast_data["style"] = "🔵"
+    if call.data=="style_blue":
+        broadcast_data["style"]="🔵"
 
     bot.send_message(
         call.message.chat.id,
@@ -481,19 +549,24 @@ def set_style(call):
     )
 
 
-# ---------- PREVIEW ----------
+# ==============================
+# PREVIEW
+# ==============================
 
-@bot.callback_query_handler(func=lambda c: c.data == "preview")
+@bot.callback_query_handler(func=lambda c:c.data=="preview")
 def preview(call):
 
-    text = f"{broadcast_data['style']} {broadcast_data['text']}"
+    text=f"{broadcast_data['style']} {broadcast_data['text']}"
 
-    kb = InlineKeyboardMarkup()
+    kb=InlineKeyboardMarkup()
 
     for b in broadcast_data["buttons"]:
 
         kb.add(
-            InlineKeyboardButton(b[0], url=b[1])
+            InlineKeyboardButton(
+                b[0],
+                url=b[1]
+            )
         )
 
     bot.send_message(
@@ -503,31 +576,36 @@ def preview(call):
     )
 
 
-# ---------- SEND BROADCAST ----------
+# ==============================
+# SEND BROADCAST
+# ==============================
 
-@bot.callback_query_handler(func=lambda c: c.data == "send_bc")
+@bot.callback_query_handler(func=lambda c:c.data=="send_bc")
 def send_broadcast(call):
 
-    users = users_collection.find()
-    bots = bots_collection.find()
+    users=users_collection.find()
+    bots=bots_collection.find()
 
-    text = f"{broadcast_data['style']} {broadcast_data['text']}"
+    text=f"{broadcast_data['style']} {broadcast_data['text']}"
 
-    kb = InlineKeyboardMarkup()
+    kb=InlineKeyboardMarkup()
 
     for b in broadcast_data["buttons"]:
 
         kb.add(
-            InlineKeyboardButton(b[0], url=b[1])
+            InlineKeyboardButton(
+                b[0],
+                url=b[1]
+            )
         )
 
-    sent = 0
+    sent=0
 
     for b in bots:
 
         try:
 
-            send_bot = telebot.TeleBot(b["token"])
+            send_bot=telebot.TeleBot(b["token"])
 
             for u in users:
 
@@ -539,7 +617,7 @@ def send_broadcast(call):
                         reply_markup=kb
                     )
 
-                    sent += 1
+                    sent+=1
 
                 except:
                     pass
@@ -552,9 +630,13 @@ def send_broadcast(call):
         f"📢 Broadcast sent\nDelivered: {sent}"
     )
 
-    broadcast_data["text"] = None
-    broadcast_data["buttons"] = []
+    broadcast_data["text"]=None
+    broadcast_data["buttons"]=[]
 
+
+# ==============================
+# RUN BOT
+# ==============================
 
 print("Admin Bot Running...")
 
