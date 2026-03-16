@@ -328,17 +328,24 @@ def save_bot(message):
 
         bot.send_message(
             message.chat.id,
-            "❌ Invalid token format"
+            "❌ Invalid bot token format"
         )
         return
 
     try:
 
-        test_bot = telebot.TeleBot(token)
+        test_bot = telebot.TeleBot(token, threaded=False)
 
         me = test_bot.get_me()
 
         username = me.username
+
+        if not username:
+            bot.send_message(
+                message.chat.id,
+                "❌ Could not detect bot username"
+            )
+            return
 
         bots_collection.update_one(
             {"token": token},
@@ -356,13 +363,12 @@ def save_bot(message):
 
         bot.send_message(
             message.chat.id,
-f"""✅ Bot Added Successfully
+            f"""✅ Bot Added Successfully
 
 🤖 Bot: @{username}
 
-🚀 Your bot will automatically become a TikTok downloader.
-
-Send any TikTok link to your bot and it will download instantly."""
+🚀 Your bot is now connected to the downloader system.
+"""
         )
 
         print("New bot added:", username)
@@ -373,7 +379,7 @@ Send any TikTok link to your bot and it will download instantly."""
 
         bot.send_message(
             message.chat.id,
-            "❌ Invalid bot token.\nMake sure you started the bot first."
+            "❌ Invalid token or Telegram API error"
         )
 
 # ================= MY BOTS =================
