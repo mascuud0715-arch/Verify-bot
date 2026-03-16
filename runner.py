@@ -51,11 +51,17 @@ running_bots = {}
 
 def save_user(uid):
 
-    users_collection.update_one(
-        {"user_id": uid},
-        {"$set": {"user_id": uid}},
-        upsert=True
-    )
+    try:
+
+        users_collection.update_one(
+            {"user_id": uid},
+            {"$set": {"user_id": uid}},
+            upsert=True
+        )
+
+    except Exception as e:
+
+        print("Save user error:", e)
 
 # ================= SYSTEM STATUS =================
 
@@ -135,12 +141,21 @@ def download_tiktok(url):
                 d = data["data"]
 
                 if d.get("images"):
-                    return {"type": "photo", "media": d["images"]}
+                    return {
+                        "type": "photo",
+                        "media": d["images"]
+                    }
 
                 if d.get("play"):
-                    return {"type": "video", "media": d["play"]}
+                    return {
+                        "type": "video",
+                        "media": d["play"]
+                    }
 
-            except:
+            except Exception as e:
+
+                print("API error:", e)
+
                 continue
 
     return None
@@ -153,17 +168,25 @@ def download_video(url):
 
         try:
 
-            r = session.get(url, stream=True, timeout=60)
+            r = session.get(
+                url,
+                stream=True,
+                timeout=60
+            )
 
             with tempfile.NamedTemporaryFile(delete=False) as f:
 
                 for chunk in r.iter_content(1024 * 512):
+
                     if chunk:
                         f.write(chunk)
 
                 return f.name
 
-        except:
+        except Exception as e:
+
+            print("Video download error:", e)
+
             time.sleep(1)
 
     return None
@@ -176,7 +199,11 @@ def download_photo(url):
 
         try:
 
-            r = session.get(url, stream=True, timeout=60)
+            r = session.get(
+                url,
+                stream=True,
+                timeout=60
+            )
 
             with tempfile.NamedTemporaryFile(delete=False) as f:
 
@@ -190,6 +217,7 @@ def download_photo(url):
         except Exception as e:
 
             print("Photo download error:", e)
+
             time.sleep(1)
 
     return None
@@ -249,12 +277,19 @@ def process_download(bot, chat_id, uid, url):
 
             bot.send_message(chat_id, "Created: @Verify_yourbot")
 
-            os.remove(path)
+            try:
+                os.remove(path)
+            except:
+                pass
 
-            downloads_collection.insert_one({
-                "type": "video",
-                "user": uid
-            })
+            try:
+                downloads_collection.insert_one({
+                    "type": "video",
+                    "user": uid,
+                    "time": time.time()
+                })
+            except:
+                pass
 
         # ===== PHOTO =====
 
@@ -271,45 +306,60 @@ def process_download(bot, chat_id, uid, url):
 
                     bot.send_photo(chat_id, p)
 
-                os.remove(path)
+                try:
+                    os.remove(path)
+                except:
+                    pass
 
             bot.send_message(chat_id, "Created: @Verify_yourbot")
 
-            downloads_collection.insert_one({
-                "type": "photo",
-                "user": uid
-            })
+            try:
+                downloads_collection.insert_one({
+                    "type": "photo",
+                    "user": uid,
+                    "time": time.time()
+                })
+            except:
+                pass
 
     except Exception as e:
 
         print("Download error:", e)
 
-        bot.send_message(chat_id, "❌ Error downloading")
+        try:
+            bot.send_message(chat_id, "❌ Error downloading")
+        except:
+            pass
+
 
 # ================= START USER BOT =================
 
 def start_user_bot(token):
 
-    try:
+    while True:
 
-        bot = telebot.TeleBot(
-            token,
-            threaded=True,
-            num_threads=100
-        )
+        try:
 
-        running_bots[token] = bot
+            bot = telebot.TeleBot(
+                token,
+                threaded=True,
+                num_threads=100
+            )
 
-        @bot.message_handler(commands=["start"])
-        def start(message):
+            running_bots[token] = bot
 
-            uid = message.from_user.id
+            # ===== START COMMAND =====
 
-            save_user(uid)
+            @bot.message_handler(commands=["start"])
+            def start(message):
 
-            bot.send_message(
+                uid = message.from_user.id
 
-                message.chat.id,
+                save_user(uid)
+
+                bot.send_message(
+
+                    message.chat.id,
 
 """👋 Welcome to TikTok Downloader Bot
 
@@ -326,35 +376,40 @@ Just send a TikTok link to begin.
 
 Create your own downloader:
 @Verify_yourbot"""
+                )
+
+            # ===== TIKTOK HANDLER =====
+
+            @bot.message_handler(func=lambda m: m.text and ("tiktok.com" in m.text or "vt.tiktok.com" in m.text))
+            def tiktok(message):
+
+                uid = message.from_user.id
+                url = message.text.strip()
+
+                download_pool.submit(
+                    process_download,
+                    bot,
+                    message.chat.id,
+                    uid,
+                    url
+                )
+
+            print("🟢 Bot Started:", token)
+
+            bot.infinity_polling(
+                skip_pending=True,
+                timeout=60,
+                long_polling_timeout=60
             )
 
-        @bot.message_handler(func=lambda m: m.text and ("tiktok.com" in m.text or "vt.tiktok.com" in m.text))
-        def tiktok(message):
+        except Exception as e:
 
-            uid = message.from_user.id
-            url = message.text.strip()
+            print("❌ Bot crash:", token, e)
 
-            download_pool.submit(
-                process_download,
-                bot,
-                message.chat.id,
-                uid,
-                url
-            )
+            time.sleep(5)
 
-        print("🟢 Bot Started:", token)
 
-        bot.infinity_polling(
-            skip_pending=True,
-            timeout=60,
-            long_polling_timeout=60
-        )
-
-    except Exception as e:
-
-        print("❌ Bot start error:", e)
-
-# ================= RUNNER LOOP =================
+# ================= RUNNER SYSTEM =================
 
 print("🚀 Runner System Started...")
 
@@ -367,6 +422,8 @@ while True:
         bots = list(bots_collection.find())
 
         active_tokens = []
+
+        # ===== ADMIN CLOSED BOTS =====
 
         if not bots_status:
 
@@ -384,6 +441,8 @@ while True:
 
             time.sleep(10)
             continue
+
+        # ===== START BOTS =====
 
         for b in bots:
 
@@ -420,6 +479,8 @@ while True:
                         del running_bots[token]
                     except:
                         pass
+
+        # ===== REMOVE DELETED BOTS =====
 
         for token in list(running_bots.keys()):
 
