@@ -35,6 +35,9 @@ users_collection = db["users"]
 channels_collection = db["channels"]
 system_collection = db["system"]
 
+bots_collection.create_index("token")
+bots_collection.create_index("owner")
+
 # ================= INIT SYSTEM =================
 
 def init_system():
@@ -310,35 +313,45 @@ def save_bot(message):
 
     try:
 
+        # check duplicate
+        if bots_collection.find_one({"token": token}):
+
+            bot.send_message(
+                message.chat.id,
+                "⚠️ This bot is already added."
+            )
+            return
+
         new_bot = telebot.TeleBot(token)
 
         info = new_bot.get_me()
 
-        bots_collection.update_one(
-            {"token": token},
-            {
-                "$set":{
-                    "token": token,
-                    "username": info.username,
-                    "owner": message.from_user.id,
-                    "active":True
-                }
-            },
-            upsert=True
-        )
+        username = info.username
+
+        bots_collection.insert_one({
+            "token": token,
+            "username": username,
+            "owner": message.from_user.id,
+            "active": True,
+            "created": time.time()
+        })
 
         bot.send_message(
             message.chat.id,
-            f"✅ Bot Added\n\n@{info.username}\n\nRunner will start it automatically."
+            f"""✅ Bot Added Successfully
+
+🤖 Bot: @{username}
+
+Your bot will start automatically."""
         )
 
     except Exception as e:
 
-        print("Add bot error:", e)
+        print("Bot add error:", e)
 
         bot.send_message(
             message.chat.id,
-            "❌ Invalid bot token"
+            "❌ Invalid bot token or bot not started.\n\nStart your bot first then send the token."
         )
 
     # ================= MY BOTS =================
