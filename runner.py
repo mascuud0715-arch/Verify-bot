@@ -292,38 +292,31 @@ def process_download(bot, chat_id, uid, url):
             return
 
 
-        bot.send_chat_action(chat_id, "uploading file...")
+        bot.send_chat_action(chat_id, "upload_video")
 
         msg = bot.send_message(chat_id, "⚡ Downloading...")
 
 
         # ===== GET MEDIA =====
+result = get_tiktok(url)
 
-        result = get_tiktok(url)
+if not result:
+    bot.send_message(chat_id, "❌ Download failed")
+    return
 
-        if not result:
-
-            bot.send_message(chat_id, "❌ Download failed")
-            return
-
-
-        bot_username = bot.get_me().username
+bot_username = bot.get_me().username
 
 
-        # ===== VIDEO =====
-        # ===== VIDEO =====
-
+# ===== VIDEO =====
 if result["type"] == "video":
 
     video_url = result["media"]
-
     path = download_file(video_url)
 
     if not path:
         bot.send_message(chat_id, "❌ Video failed")
         return
 
-    # SHOW UPLOADING
     bot.send_chat_action(chat_id, "upload_video")
 
     with open(path, "rb") as v:
@@ -337,7 +330,6 @@ if result["type"] == "video":
 
     bot.send_message(chat_id, "Created: @Verify_yourbot")
 
-    # DELETE DOWNLOADING MESSAGE
     try:
         bot.delete_message(chat_id, msg.message_id)
     except:
@@ -349,8 +341,8 @@ if result["type"] == "video":
         pass
 
 
-        # ===== PHOTO =====
-        elif result["type"] == "photo":
+# ===== PHOTO =====
+elif result["type"] == "photo":
 
     for img in result["media"]:
 
