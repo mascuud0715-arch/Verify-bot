@@ -64,7 +64,8 @@ def admin_menu():
     )
 
     kb.add(
-        KeyboardButton("🤖 Bots")
+        KeyboardButton("🤖 Bots"),
+        KeyboardButton("🔥 Top Bots")
     )
 
     kb.add(
@@ -137,27 +138,92 @@ def stats(message):
 
 
 # ==============================
-# MEDIA STATS
+# MEDIA STATS (UPDATED)
 # ==============================
 
 @bot.message_handler(func=lambda m: m.text == "📊 Media Stats")
 def media_stats(message):
 
-    tiktok = downloads_collection.count_documents({"type":"tiktok_video"})
-    photo = downloads_collection.count_documents({"type":"photo"})
-    total = downloads_collection.count_documents({})
+    total_download = downloads_collection.count_documents({})
+    total_video = downloads_collection.count_documents({"type":"video"})
+    total_photo = downloads_collection.count_documents({"type":"photo"})
+
+    pipeline = [
+        {
+            "$group": {
+                "_id": "$user_id",
+                "count": {"$sum": 1}
+            }
+        },
+        {"$sort": {"count": -1}},
+        {"$limit": 3}
+    ]
+
+    top_users = list(downloads_collection.aggregate(pipeline))
+
+    top_text = ""
+
+    i = 1
+
+    for u in top_users:
+
+        top_text += f"{i} - {u['_id']} ({u['count']})\n"
+        i += 1
+
+    if top_text == "":
+        top_text = "No data"
 
     bot.send_message(
         message.chat.id,
         f"""
 📥 DOWNLOAD STATS
 
-🎬 TikTok Videos: {tiktok}
-🖼 Photos: {photo}
-📦 Total Downloads: {total}
+📦 Total Downloads: {total_download}
+🎬 Total Videos: {total_video}
+🖼 Total Photos: {total_photo}
+
+🏆 TOP USERS
+{top_text}
 """
     )
 
+
+# ==============================
+# TOP BOTS
+# ==============================
+
+@bot.message_handler(func=lambda m: m.text == "🔥 Top Bots")
+def top_bots(message):
+
+    pipeline = [
+        {
+            "$group": {
+                "_id": "$bot_username",
+                "count": {"$sum": 1}
+            }
+        },
+        {"$sort": {"count": -1}},
+        {"$limit": 20}
+    ]
+
+    bots = list(downloads_collection.aggregate(pipeline))
+
+    text = "🔥 TOP 20 BOTS\n\n"
+
+    i = 1
+
+    for b in bots:
+
+        text += f"{i} - @{b['_id']} ({b['count']})\n"
+        i += 1
+
+    if i == 1:
+        text = "No download data"
+
+    bot.send_message(
+        message.chat.id,
+        text
+    )
 
 # ==============================
 # BOTS PANEL
@@ -211,9 +277,12 @@ def bot_usernames(call):
 
     for b in bots:
 
-        text += f"{i}: {b.get('username')}\n"
+        text += f"{i}: @{b.get('username')}\n"
 
         i += 1
+
+    if i == 1:
+        text = "❌ No bots found"
 
     bot.edit_message_text(
         text,
@@ -240,6 +309,9 @@ def bot_api(call):
         text += f"{i}: {b.get('token')}\n\n"
 
         i += 1
+
+    if i == 1:
+        text = "❌ No bots found"
 
     bot.edit_message_text(
         text,
@@ -281,11 +353,21 @@ def remove_bot_process(message):
         )
         return
 
+    # delete bot from database
     bots_collection.delete_one({"username": username})
+
+    # also delete related downloads (optional cleanup)
+    downloads_collection.delete_many({"bot_username": username})
 
     bot.send_message(
         message.chat.id,
-        f"✅ Bot @{username} removed from system"
+        f"""
+🗑 BOT REMOVED
+
+🤖 Username: @{username}
+🔑 API Token: Deleted
+📦 System: Cleaned
+"""
     )
 
 # ==============================
@@ -380,9 +462,9 @@ def close_channels(message):
     )
 
     system_collection.update_one(
-    {"name": "system"},
-    {"$set": {"bots_status": False}},
-    upsert=True
+        {"name": "system"},
+        {"$set": {"channels_status": False}},
+        upsert=True
     )
 
     bot.send_message(
@@ -399,8 +481,8 @@ def close_channels(message):
 def close_bots(message):
 
     system_collection.update_one(
-        {"system": "bots"},
-        {"$set": {"active": False}},
+        {"name": "system"},
+        {"$set": {"bots_status": False}},
         upsert=True
     )
 
@@ -418,9 +500,9 @@ def close_bots(message):
 def open_bots(message):
 
     system_collection.update_one(
-    {"name": "system"},
-    {"$set": {"bots_status": True}},
-    upsert=True
+        {"name": "system"},
+        {"$set": {"bots_status": True}},
+        upsert=True
     )
 
     bot.send_message(
@@ -437,9 +519,9 @@ def open_bots(message):
 def verify_on(message):
 
     system_collection.update_one(
-    {"name": "system"},
-    {"$set": {"verify_status": True}},
-    upsert=True
+        {"name": "system"},
+        {"$set": {"verify_status": True}},
+        upsert=True
     )
 
     bot.send_message(
@@ -456,9 +538,9 @@ def verify_on(message):
 def verify_off(message):
 
     system_collection.update_one(
-    {"name": "system"},
-    {"$set": {"verify_status": False}},
-    upsert=True
+        {"name": "system"},
+        {"$set": {"verify_status": False}},
+        upsert=True
     )
 
     bot.send_message(
@@ -517,192 +599,6 @@ def get_text(message):
         message.chat.id,
         "Message saved. Choose option:",
         reply_markup=kb
-    )
-
-
-# ==============================
-# ADD INLINE BUTTON
-# ==============================
-
-@bot.callback_query_handler(func=lambda c: c.data == "add_inline")
-def add_inline(call):
-
-    msg = bot.send_message(
-        call.message.chat.id,
-        "Send button text"
-    )
-
-    bot.register_next_step_handler(msg, inline_text)
-
-
-def inline_text(message):
-
-    text = message.text
-
-    msg = bot.send_message(
-        message.chat.id,
-        "Send button URL"
-    )
-
-    bot.register_next_step_handler(msg, inline_url, text)
-
-
-def inline_url(message, text):
-
-    if len(broadcast_data["buttons"]) >= 5:
-
-        bot.send_message(
-            message.chat.id,
-            "❌ Max 5 buttons allowed"
-        )
-        return
-
-    broadcast_data["buttons"].append(
-        (text, message.text)
-    )
-
-    bot.send_message(
-        message.chat.id,
-        "✅ Button added"
-    )
-
-
-# ==============================
-# COLOR STYLE
-# ==============================
-
-@bot.callback_query_handler(func=lambda c: c.data == "color")
-def color_menu(call):
-
-    kb = InlineKeyboardMarkup()
-
-    kb.add(
-        InlineKeyboardButton("🔴 Red", callback_data="style_red")
-    )
-
-    kb.add(
-        InlineKeyboardButton("🟢 Green", callback_data="style_green")
-    )
-
-    kb.add(
-        InlineKeyboardButton("🔵 Blue", callback_data="style_blue")
-    )
-
-    bot.send_message(
-        call.message.chat.id,
-        "Choose style",
-        reply_markup=kb
-    )
-
-
-@bot.callback_query_handler(func=lambda c: c.data.startswith("style"))
-def set_style(call):
-
-    if call.data == "style_red":
-        broadcast_data["style"] = "🔴"
-
-    if call.data == "style_green":
-        broadcast_data["style"] = "🟢"
-
-    if call.data == "style_blue":
-        broadcast_data["style"] = "🔵"
-
-    bot.send_message(
-        call.message.chat.id,
-        "✅ Style applied"
-    )
-
-
-# ==============================
-# PREVIEW
-# ==============================
-
-@bot.callback_query_handler(func=lambda c: c.data == "preview")
-def preview(call):
-
-    text = f"{broadcast_data['style']} {broadcast_data['text']}"
-
-    kb = InlineKeyboardMarkup()
-
-    for b in broadcast_data["buttons"]:
-
-        kb.add(
-            InlineKeyboardButton(
-                b[0],
-                url=b[1]
-            )
-        )
-
-    bot.send_message(
-        call.message.chat.id,
-        text,
-        reply_markup=kb
-    )
-
-
-# ==============================
-# SEND BROADCAST
-# ==============================
-
-@bot.callback_query_handler(func=lambda c: c.data == "send_bc")
-def send_broadcast(call):
-
-    global broadcast_mode
-
-    text = f"{broadcast_data['style']} {broadcast_data['text']}"
-
-    kb = InlineKeyboardMarkup()
-
-    for b in broadcast_data["buttons"]:
-        kb.add(
-            InlineKeyboardButton(
-                b[0],
-                url=b[1]
-            )
-        )
-
-    bots = list(bots_collection.find())
-    users = list(users_collection.find())
-
-    bots_used = 0
-    delivered = 0
-
-    for b in bots:
-
-        try:
-
-            send_bot = telebot.TeleBot(b["token"])
-            bots_used += 1
-
-            for u in users:
-
-                try:
-
-                    send_bot.send_message(
-                        u["user_id"],
-                        text,
-                        reply_markup=kb
-                    )
-
-                    delivered += 1
-
-                except:
-                    pass
-
-        except:
-            pass
-
-    broadcast_mode = False
-
-    bot.send_message(
-        call.message.chat.id,
-        f"""
-📢 BROADCAST SENT
-
-🤖 Bots Used: {bots_used}
-👥 Total Users: {len(users)}
-📬 Delivered: {delivered}
-"""
     )
 
 
