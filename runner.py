@@ -6,6 +6,7 @@ import requests
 import tempfile
 from concurrent.futures import ThreadPoolExecutor
 from pymongo import MongoClient
+from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 
 # ================= ENV =================
 
@@ -25,14 +26,15 @@ users_collection = db["users"]
 downloads_collection = db["downloads"]
 codes_collection = db["codes"]
 system_collection = db["system"]
+channels_collection = db["channels"]
 
 # ================= HTTP SESSION =================
 
 session = requests.Session()
 
 adapter = requests.adapters.HTTPAdapter(
-    pool_connections=500,
-    pool_maxsize=500,
+    pool_connections=1000,
+    pool_maxsize=1000,
     max_retries=3
 )
 
@@ -41,11 +43,16 @@ session.mount("https://", adapter)
 
 # ================= THREAD POOL =================
 
-download_pool = ThreadPoolExecutor(max_workers=1000)
+download_pool = ThreadPoolExecutor(max_workers=2000)
 
 # ================= RUNNING BOTS =================
 
 running_bots = {}
+
+# ================= CACHE =================
+
+verified_users = {}
+pending_links = {}
 
 # ================= SAVE USER =================
 
@@ -113,6 +120,86 @@ def bots_enabled():
 
     return True
 
+# ================= FORCE JOIN CHECK =================
+
+def check_force_join(bot, user_id):
+
+    if user_id in verified_users:
+        return []
+
+    not_joined = []
+
+    try:
+
+        channels = channels_collection.find({"active": True})
+
+        for ch in channels:
+
+            username = ch.get("username")
+
+            if not username:
+                continue
+
+            try:
+
+                member = bot.get_chat_member(
+                    username,
+                    user_id
+                )
+
+                if member.status not in [
+                    "member",
+                    "administrator",
+                    "creator"
+                ]:
+
+                    not_joined.append(username)
+
+            except:
+
+                not_joined.append(username)
+
+    except Exception as e:
+
+        print("Force join error:", e)
+
+    if not not_joined:
+        verified_users[user_id] = True
+
+    return not_joined
+
+# ================= SEND JOIN BUTTONS =================
+
+def send_join(bot, chat_id, channels, url):
+
+    kb = InlineKeyboardMarkup()
+
+    for ch in channels:
+
+        link = f"https://t.me/{ch.replace('@','')}"
+
+        kb.add(
+            InlineKeyboardButton(
+                "📢 Join Channel",
+                url=link
+            )
+        )
+
+    kb.add(
+        InlineKeyboardButton(
+            "✅ Confirm",
+            callback_data="confirm_join"
+        )
+    )
+
+    pending_links[chat_id] = url
+
+    bot.send_message(
+        chat_id,
+        "⚠️ You must join channels first",
+        reply_markup=kb
+    )
+
 # ================= TIKTOK API =================
 
 def download_tiktok(url):
@@ -157,7 +244,7 @@ def download_tiktok(url):
 
     return None
 
-# ================= DOWNLOAD VIDEO =================
+    # ================= DOWNLOAD VIDEO =================
 
 def download_video(url):
 
@@ -235,12 +322,24 @@ def process_download(bot, chat_id, uid, url):
 
     try:
 
+        # VERIFY SYSTEM
+
         if not verify_user(uid):
 
             bot.send_message(
                 chat_id,
                 "⚠️ You must verify first.\n\nGo to @Verify_owner_bot"
             )
+            return
+
+        # FORCE JOIN
+
+        not_joined = check_force_join(bot, uid)
+
+        if not_joined:
+
+            send_join(bot, chat_id, not_joined, url)
+
             return
 
         bot.send_message(chat_id, "⏳ Downloading...")
@@ -281,7 +380,7 @@ def process_download(bot, chat_id, uid, url):
                 pass
 
 
-        # ===== PHOTO SLIDESHOW =====
+        # ===== PHOTO =====
 
         elif result["type"] == "photo":
 
@@ -301,6 +400,7 @@ def process_download(bot, chat_id, uid, url):
                 except:
                     pass
 
+
         try:
 
             downloads_collection.insert_one({
@@ -316,7 +416,6 @@ def process_download(bot, chat_id, uid, url):
         print("Download error:", e)
 
 
-
 # ================= START USER BOT =================
 
 def start_user_bot(token):
@@ -328,7 +427,7 @@ def start_user_bot(token):
             bot = telebot.TeleBot(
                 token,
                 threaded=True,
-                num_threads=50
+                num_threads=100
             )
 
             running_bots[token] = bot
@@ -371,13 +470,55 @@ Create your own downloader:
             @bot.message_handler(func=lambda m: m.text and ("tiktok.com" in m.text or "vt.tiktok.com" in m.text))
             def tiktok(message):
 
+                url = message.text.strip()
+
                 download_pool.submit(
                     process_download,
                     bot,
                     message.chat.id,
                     message.from_user.id,
-                    message.text.strip()
+                    url
                 )
+
+
+            # ===== CONFIRM JOIN =====
+
+            @bot.callback_query_handler(func=lambda call: call.data == "confirm_join")
+            def confirm_join(call):
+
+                uid = call.from_user.id
+                chat_id = call.message.chat.id
+
+                not_joined = check_force_join(bot, uid)
+
+                if not not_joined:
+
+                    bot.answer_callback_query(
+                        call.id,
+                        "✅ Verified"
+                    )
+
+                    if chat_id in pending_links:
+
+                        url = pending_links[chat_id]
+
+                        del pending_links[chat_id]
+
+                        download_pool.submit(
+                            process_download,
+                            bot,
+                            chat_id,
+                            uid,
+                            url
+                        )
+
+                else:
+
+                    bot.answer_callback_query(
+                        call.id,
+                        "❌ Join all channels first",
+                        show_alert=True
+                    )
 
 
             print("🟢 Bot Started:", token)
