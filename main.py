@@ -204,7 +204,6 @@ def send_force_join(chat_id):
 
     return True
 
-
 # ================= START =================
 
 @bot.message_handler(commands=["start"])
@@ -220,7 +219,11 @@ def start(message):
 
             not_joined = check_channels(message.from_user.id)
 
-            if not_joined:
+            if not not_joined:
+
+                pass
+
+            else:
 
                 send_force_join(message.chat.id)
                 return
@@ -257,7 +260,6 @@ Choose an option below to continue.
         reply_markup=main_menu()
     )
 
-
 # ================= CONFIRM JOIN =================
 
 @bot.callback_query_handler(func=lambda call: call.data == "confirm_join")
@@ -288,7 +290,6 @@ def confirm_join(call):
             show_alert=True
         )
 
-
 # ================= ADD BOT =================
 
 @bot.message_handler(func=lambda m: m.text == "➕ Add Bot")
@@ -304,7 +305,6 @@ def add_bot(message):
         save_bot
     )
 
-
 # ================= SAVE BOT =================
 
 def save_bot(message):
@@ -319,21 +319,28 @@ def save_bot(message):
         )
         return
 
-    bots_collection.insert_one({
-        "token": token,
-        "owner": message.from_user.id,
-        "active": True,
-        "created": time.time()
-    })
+    try:
 
-    bot.send_message(
-        message.chat.id,
-        "✅ Bot Added Successfully\n\nRunner will start it automatically."
-    )
+        test_bot = telebot.TeleBot(token)
+        me = test_bot.get_me()
+
+        username = me.username
+
+        bots_collection.insert_one({
+            "token": token,
+            "username": username,
+            "owner": message.from_user.id,
+            "active": True,
+            "created": time.time()
+        })
+
+        bot.send_message(
+            message.chat.id,
+            f"""✅ Bot Added Successfully
 
 🤖 Bot: @{username}
 
-Your bot will start automatically."""
+Runner will start it automatically."""
         )
 
     except Exception as e:
@@ -342,10 +349,10 @@ Your bot will start automatically."""
 
         bot.send_message(
             message.chat.id,
-            "❌ Invalid bot token or bot not started.\n\nStart your bot first then send the token."
+            "❌ Invalid bot token or bot not started.\nStart the bot first then send token."
         )
 
-    # ================= MY BOTS =================
+# ================= MY BOTS =================
 
 @bot.message_handler(func=lambda m: m.text == "🤖 My Bots")
 def my_bots(message):
@@ -377,7 +384,6 @@ def my_bots(message):
 
         print("My bots error:", e)
 
-
 # ================= REMOVE BOT =================
 
 @bot.message_handler(func=lambda m: m.text == "❌ Remove Bot")
@@ -385,7 +391,7 @@ def remove_bot(message):
 
     msg = bot.send_message(
         message.chat.id,
-        "Send bot username to remove\n\nExample:\n@mybot"
+        "Send bot username to remove\nExample:\n@mybot"
     )
 
     bot.register_next_step_handler(
@@ -432,7 +438,6 @@ def remove_bot_process(message):
 
         print("Remove bot error:", e)
 
-
 # ================= STATS =================
 
 @bot.message_handler(commands=["stats"])
@@ -462,7 +467,6 @@ def stats(message):
     except Exception as e:
 
         print("Stats error:", e)
-
 
 # ================= VERIFY API =================
 
@@ -510,7 +514,6 @@ def verify():
             "status":"error"
         })
 
-
 # ================= RUN BOT =================
 
 def run_bot():
@@ -531,7 +534,6 @@ def run_bot():
 
             time.sleep(5)
 
-
 # ================= START =================
 
 if __name__ == "__main__":
@@ -549,4 +551,4 @@ if __name__ == "__main__":
     app.run(
         host="0.0.0.0",
         port=port
-)
+    )
