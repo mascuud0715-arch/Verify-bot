@@ -140,13 +140,19 @@ def download_tiktok(url):
 
                 d = data["data"]
 
+                # ===== PHOTO SLIDES =====
+
                 if d.get("images"):
+
                     return {
                         "type": "photo",
                         "media": d["images"]
                     }
 
+                # ===== VIDEO =====
+
                 if d.get("play"):
+
                     return {
                         "type": "video",
                         "media": d["play"]
@@ -291,7 +297,7 @@ def process_download(bot, chat_id, uid, url):
             except:
                 pass
 
-        # ===== PHOTO =====
+        # ===== PHOTO SLIDESHOW =====
 
         elif result["type"] == "photo":
 
@@ -348,7 +354,7 @@ def start_user_bot(token):
 
             running_bots[token] = bot
 
-            # ===== START COMMAND =====
+            # ===== START =====
 
             @bot.message_handler(commands=["start"])
             def start(message):
@@ -365,20 +371,20 @@ def start_user_bot(token):
 
 📥 Send any TikTok link and I will download it instantly.
 
-Features:
+Features
 • No watermark video
 • Photo slideshow download
 • Fast download
 
-Just send a TikTok link to begin.
+Send a TikTok link to begin.
 
 ━━━━━━━━━━━━━━
-
-Create your own downloader:
-@Verify_yourbot"""
+Create your own downloader
+@Verify_yourbot
+"""
                 )
 
-            # ===== TIKTOK HANDLER =====
+            # ===== LINK HANDLER =====
 
             @bot.message_handler(func=lambda m: m.text and ("tiktok.com" in m.text or "vt.tiktok.com" in m.text))
             def tiktok(message):
