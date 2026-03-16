@@ -15,7 +15,7 @@ MONGO_URL = os.getenv("MONGO_URL")
 
 client = MongoClient(
     MONGO_URL,
-    maxPoolSize=600
+    maxPoolSize=500
 )
 
 db = client["verify_system"]
@@ -31,8 +31,8 @@ system_collection = db["system"]
 session = requests.Session()
 
 adapter = requests.adapters.HTTPAdapter(
-    pool_connections=1000,
-    pool_maxsize=1000,
+    pool_connections=500,
+    pool_maxsize=500,
     max_retries=3
 )
 
@@ -41,7 +41,7 @@ session.mount("https://", adapter)
 
 # ================= THREAD POOL =================
 
-download_pool = ThreadPoolExecutor(max_workers=3000)
+download_pool = ThreadPoolExecutor(max_workers=1000)
 
 # ================= RUNNING BOTS =================
 
@@ -119,50 +119,41 @@ def download_tiktok(url):
 
     apis = [
         f"https://tikwm.com/api/?url={url}",
-        f"https://www.tikwm.com/api/?url={url}",
-        f"https://tikwm.com/api/?hd=1&url={url}"
+        f"https://www.tikwm.com/api/?hd=1&url={url}"
     ]
 
     headers = {"User-Agent": "Mozilla/5.0"}
 
     for api in apis:
 
-        for i in range(5):
+        try:
 
-            try:
+            r = session.get(api, headers=headers, timeout=15)
 
-                r = session.get(api, headers=headers, timeout=20)
+            data = r.json()
 
-                data = r.json()
-
-                if data.get("code") != 0:
-                    continue
-
-                d = data["data"]
-
-                # ===== PHOTO SLIDES =====
-
-                if d.get("images"):
-
-                    return {
-                        "type": "photo",
-                        "media": d["images"]
-                    }
-
-                # ===== VIDEO =====
-
-                if d.get("play"):
-
-                    return {
-                        "type": "video",
-                        "media": d["play"]
-                    }
-
-            except Exception as e:
-
-                print("API error:", e)
-
+            if data.get("code") != 0:
                 continue
+
+            d = data["data"]
+
+            if d.get("images"):
+
+                return {
+                    "type": "photo",
+                    "media": d["images"]
+                }
+
+            if d.get("play"):
+
+                return {
+                    "type": "video",
+                    "media": d["play"]
+                }
+
+        except Exception as e:
+
+            print("API error:", e)
 
     return None
 
@@ -197,6 +188,7 @@ def download_video(url):
 
     return None
 
+
 # ================= DOWNLOAD PHOTO =================
 
 def download_photo(url):
@@ -228,6 +220,7 @@ def download_photo(url):
 
     return None
 
+
 # ================= PROCESS DOWNLOAD =================
 
 def process_download(bot, chat_id, uid, url):
@@ -246,7 +239,7 @@ def process_download(bot, chat_id, uid, url):
 
             bot.send_message(
                 chat_id,
-                "⚠️ You must verify first.\n\nGo to @Verify_owner_bot and get your code."
+                "⚠️ You must verify first.\n\nGo to @Verify_owner_bot"
             )
             return
 
@@ -260,6 +253,7 @@ def process_download(bot, chat_id, uid, url):
             return
 
         bot_username = bot.get_me().username
+
 
         # ===== VIDEO =====
 
@@ -281,21 +275,11 @@ def process_download(bot, chat_id, uid, url):
                     supports_streaming=True
                 )
 
-            bot.send_message(chat_id, "Created: @Verify_yourbot")
-
             try:
                 os.remove(path)
             except:
                 pass
 
-            try:
-                downloads_collection.insert_one({
-                    "type": "video",
-                    "user": uid,
-                    "time": time.time()
-                })
-            except:
-                pass
 
         # ===== PHOTO SLIDESHOW =====
 
@@ -317,25 +301,20 @@ def process_download(bot, chat_id, uid, url):
                 except:
                     pass
 
-            bot.send_message(chat_id, "Created: @Verify_yourbot")
+        try:
 
-            try:
-                downloads_collection.insert_one({
-                    "type": "photo",
-                    "user": uid,
-                    "time": time.time()
-                })
-            except:
-                pass
+            downloads_collection.insert_one({
+                "user": uid,
+                "time": time.time()
+            })
+
+        except:
+            pass
 
     except Exception as e:
 
         print("Download error:", e)
 
-        try:
-            bot.send_message(chat_id, "❌ Error downloading")
-        except:
-            pass
 
 
 # ================= START USER BOT =================
@@ -349,10 +328,11 @@ def start_user_bot(token):
             bot = telebot.TeleBot(
                 token,
                 threaded=True,
-                num_threads=100
+                num_threads=50
             )
 
             running_bots[token] = bot
+
 
             # ===== START =====
 
@@ -365,40 +345,33 @@ def start_user_bot(token):
 
                 bot.send_message(
 
-                    message.chat.id,
+message.chat.id,
 
-"""👋 Welcome to TikTok Downloader Bot
+"""👋 Welcome to TikTok Downloader
 
-📥 Send any TikTok link and I will download it instantly.
+Send any TikTok link
 
 Features
-• No watermark video
-• Photo slideshow download
+• No watermark
+• Photo slideshow
 • Fast download
-
-Send a TikTok link to begin.
-
-━━━━━━━━━━━━━━
-Create your own downloader
-@Verify_yourbot
 """
                 )
+
 
             # ===== LINK HANDLER =====
 
             @bot.message_handler(func=lambda m: m.text and ("tiktok.com" in m.text or "vt.tiktok.com" in m.text))
             def tiktok(message):
 
-                uid = message.from_user.id
-                url = message.text.strip()
-
                 download_pool.submit(
                     process_download,
                     bot,
                     message.chat.id,
-                    uid,
-                    url
+                    message.from_user.id,
+                    message.text.strip()
                 )
+
 
             print("🟢 Bot Started:", token)
 
@@ -410,14 +383,15 @@ Create your own downloader
 
         except Exception as e:
 
-            print("❌ Bot crash:", token, e)
+            print("Bot crash:", token, e)
 
             time.sleep(5)
 
 
+
 # ================= RUNNER SYSTEM =================
 
-print("🚀 Runner System Started...")
+print("🚀 Runner Started")
 
 while True:
 
@@ -425,11 +399,9 @@ while True:
 
         bots_status, verify_status = system_status()
 
-        bots = list(bots_collection.find())
+        bots = list(bots_collection.find({"active": True}))
 
         active_tokens = []
-
-        # ===== ADMIN CLOSED BOTS =====
 
         if not bots_status:
 
@@ -440,53 +412,35 @@ while True:
                 except:
                     pass
 
-                try:
-                    del running_bots[token]
-                except:
-                    pass
+                del running_bots[token]
 
-            time.sleep(10)
+            time.sleep(5)
             continue
 
-        # ===== START BOTS =====
+
+        # ===== START NEW BOTS =====
 
         for b in bots:
 
             token = b.get("token")
-            active = b.get("active", True)
 
             if not token:
                 continue
 
-            if active:
+            active_tokens.append(token)
 
-                active_tokens.append(token)
+            if token not in running_bots:
 
-                if token not in running_bots:
+                threading.Thread(
+                    target=start_user_bot,
+                    args=(token,),
+                    daemon=True
+                ).start()
 
-                    threading.Thread(
-                        target=start_user_bot,
-                        args=(token,),
-                        daemon=True
-                    ).start()
+                time.sleep(0.1)
 
-                    time.sleep(0.1)
 
-            else:
-
-                if token in running_bots:
-
-                    try:
-                        running_bots[token].stop_polling()
-                    except:
-                        pass
-
-                    try:
-                        del running_bots[token]
-                    except:
-                        pass
-
-        # ===== REMOVE DELETED BOTS =====
+        # ===== STOP REMOVED BOTS =====
 
         for token in list(running_bots.keys()):
 
@@ -497,13 +451,14 @@ while True:
                 except:
                     pass
 
-                try:
-                    del running_bots[token]
-                except:
-                    pass
+                del running_bots[token]
+
 
     except Exception as e:
 
-        print("⚠ Runner error:", e)
+        print("Runner error:", e)
 
-    time.sleep(15)
+
+    # FAST SCAN
+
+    time.sleep(3)
