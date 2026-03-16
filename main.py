@@ -515,12 +515,15 @@ def verify():
         })
 
 # ================= RUN BOT =================
+# ================= RUN MAIN BOT =================
 
-def run_bot():
+def run_main():
 
     while True:
 
         try:
+
+            print("🤖 Main bot started")
 
             bot.infinity_polling(
                 skip_pending=True,
@@ -530,30 +533,23 @@ def run_bot():
 
         except Exception as e:
 
-            print("BOT ERROR:", e)
+            print("Main bot crash:", e)
 
             time.sleep(5)
 
+
 # ================= START =================
 
-# ================= RUN BOT SAFE =================
+if __name__ == "__main__":
 
-def run_bot():
+    threading.Thread(
+        target=run_main,
+        daemon=True
+    ).start()
 
-    while True:
+    port = int(os.environ.get("PORT", 5000))
 
-        try:
-
-            print("🤖 Main bot polling started")
-
-            bot.infinity_polling(
-                skip_pending=True,
-                timeout=60,
-                long_polling_timeout=60
-            )
-
-        except Exception as e:
-
-            print("⚠️ Main bot crashed:", e)
-
-            time.sleep(10)
+    app.run(
+        host="0.0.0.0",
+        port=port
+    )
