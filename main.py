@@ -16,7 +16,7 @@ ADMIN_ID = 7983838654
 # ================= TELEGRAM BOT =================
 
 bot = telebot.TeleBot(
-    token,
+    TOKEN,
     threaded=True,
     num_threads=5
 )
