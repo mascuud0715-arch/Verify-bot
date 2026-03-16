@@ -37,22 +37,7 @@ system_collection = db["system"]
 
 bots_collection.create_index("token")
 bots_collection.create_index("owner")
-
-# ================= INIT SYSTEM =================
-
-def init_system():
-
-    data = system_collection.find_one({"name":"system"})
-
-    if not data:
-
-        system_collection.insert_one({
-            "name":"system",
-            "bots_status":True,
-            "verify_status":True
-        })
-
-init_system()
+bots_collection.create_index("username")
 
 # ================= FLASK =================
 
@@ -62,22 +47,16 @@ app = Flask(__name__)
 
 def save_user(user):
 
-    try:
-
-        users_collection.update_one(
-            {"user_id": user.id},
-            {
-                "$set":{
-                    "user_id": user.id,
-                    "username": user.username
-                }
-            },
-            upsert=True
-        )
-
-    except Exception as e:
-
-        print("Save user error:", e)
+    users_collection.update_one(
+        {"user_id": user.id},
+        {
+            "$set":{
+                "user_id": user.id,
+                "username": user.username
+            }
+        },
+        upsert=True
+    )
 
 # ================= MAIN MENU =================
 
@@ -96,138 +75,12 @@ def main_menu():
 
     return kb
 
-# ================= CHECK CHANNELS =================
-
-def check_channels(user_id):
-
-    not_joined = []
-
-    try:
-
-        channels = channels_collection.find({"active": True})
-
-        for ch in channels:
-
-            username = ch.get("username")
-
-            if not username:
-                continue
-
-            try:
-
-                member = bot.get_chat_member(
-                    username,
-                    int(user_id)
-                )
-
-                if member.status not in [
-                    "member",
-                    "administrator",
-                    "creator"
-                ]:
-
-                    not_joined.append(username)
-
-            except:
-
-                not_joined.append(username)
-
-    except Exception as e:
-
-        print("Check channel error:", e)
-
-    return not_joined
-
-# ================= GET CHANNELS API =================
-
-@app.route("/channels")
-def get_channels():
-
-    channels = []
-
-    try:
-
-        for ch in channels_collection.find({"active":True}):
-
-            username = ch.get("username")
-
-            if username:
-                channels.append(username)
-
-    except Exception as e:
-
-        print("Channel API error:", e)
-
-    return jsonify({
-        "channels":channels
-    })
-
-# ================= FORCE JOIN =================
-
-def send_force_join(chat_id):
-
-    channels = list(channels_collection.find({"active": True}))
-
-    if len(channels) == 0:
-        return False
-
-    kb = InlineKeyboardMarkup()
-
-    for ch in channels:
-
-        username = ch.get("username")
-
-        if not username:
-            continue
-
-        link = f"https://t.me/{username.replace('@','')}"
-
-        kb.add(
-            InlineKeyboardButton(
-                "📢 Join Channel",
-                url=link
-            )
-        )
-
-    kb.add(
-        InlineKeyboardButton(
-            "✅ Confirm",
-            callback_data="confirm_join"
-        )
-    )
-
-    bot.send_message(
-        chat_id,
-        "⚠️ Please join all channels to continue",
-        reply_markup=kb
-    )
-
-    return True
-
-
 # ================= START =================
 
 @bot.message_handler(commands=["start"])
 def start(message):
 
     save_user(message.from_user)
-
-    try:
-
-        active_channels = channels_collection.count_documents({"active":True})
-
-        if active_channels > 0:
-
-            not_joined = check_channels(message.from_user.id)
-
-            if not_joined:
-
-                send_force_join(message.chat.id)
-                return
-
-    except Exception as e:
-
-        print("Start check error:", e)
 
     text = """
 🤖 Welcome to Verify Bot System
@@ -257,42 +110,23 @@ Choose an option below to continue.
         reply_markup=main_menu()
     )
 
-
-# ================= CONFIRM JOIN =================
-
-@bot.callback_query_handler(func=lambda call: call.data == "confirm_join")
-def confirm_join(call):
-
-    user_id = call.from_user.id
-
-    not_joined = check_channels(user_id)
-
-    if not not_joined:
-
-        bot.answer_callback_query(
-            call.id,
-            "✅ Verification successful"
-        )
-
-        bot.send_message(
-            call.message.chat.id,
-            "🎉 Verification successful",
-            reply_markup=main_menu()
-        )
-
-    else:
-
-        bot.answer_callback_query(
-            call.id,
-            "❌ Join all channels first",
-            show_alert=True
-        )
-
-
 # ================= ADD BOT =================
 
 @bot.message_handler(func=lambda m: m.text == "➕ Add Bot")
 def add_bot(message):
+
+    user_bots = bots_collection.count_documents({
+        "owner": message.from_user.id,
+        "active": True
+    })
+
+    if user_bots >= 5:
+
+        bot.send_message(
+            message.chat.id,
+            "❌ You reached number of limit bots\n\nRemove bots to add new bot"
+        )
+        return
 
     msg = bot.send_message(
         message.chat.id,
@@ -303,7 +137,6 @@ def add_bot(message):
         msg,
         save_bot
     )
-
 
 # ================= SAVE BOT =================
 
@@ -319,21 +152,45 @@ def save_bot(message):
         )
         return
 
-    bots_collection.insert_one({
-        "token": token,
-        "owner": message.from_user.id,
-        "active": True,
-        "created": time.time()
-    })
+    try:
 
-    bot.send_message(
-        message.chat.id,
-        "✅ Bot Added Successfully\n\nRunner will start it automatically."
-    )
+        test_bot = telebot.TeleBot(token)
+
+        me = test_bot.get_me()
+
+        username = me.username
+
+        exist = bots_collection.find_one({
+            "username": username
+        })
+
+        if exist:
+
+            bot.send_message(
+                message.chat.id,
+                "❌ This bot already added"
+            )
+            return
+
+        bots_collection.insert_one({
+
+            "token": token,
+            "username": username,
+            "owner": message.from_user.id,
+            "active": True,
+            "created": time.time()
+
+        })
+
+        bot.send_message(
+            message.chat.id,
+            f"""
+✅ Bot Added Successfully
 
 🤖 Bot: @{username}
 
-Your bot will start automatically."""
+Your bot will start automatically.
+"""
         )
 
     except Exception as e:
@@ -345,38 +202,33 @@ Your bot will start automatically."""
             "❌ Invalid bot token or bot not started.\n\nStart your bot first then send the token."
         )
 
-    # ================= MY BOTS =================
+# ================= MY BOTS =================
 
 @bot.message_handler(func=lambda m: m.text == "🤖 My Bots")
 def my_bots(message):
 
-    try:
+    bots = bots_collection.find({
+        "owner": message.from_user.id,
+        "active": True
+    })
 
-        bots = bots_collection.find({"owner": message.from_user.id})
+    text = "🤖 Your Bots\n\n"
 
-        text = "🤖 Your Bots\n\n"
+    found = False
 
-        found = False
+    for b in bots:
 
-        for b in bots:
+        text += f"@{b['username']}\n"
+        found = True
 
-            username = b.get("username")
+    if not found:
 
-            if username:
+        text = "❌ No bots yet"
 
-                text += f"@{username}\n"
-                found = True
-
-        if not found:
-
-            text = "❌ No bots yet"
-
-        bot.send_message(message.chat.id, text)
-
-    except Exception as e:
-
-        print("My bots error:", e)
-
+    bot.send_message(
+        message.chat.id,
+        text
+    )
 
 # ================= REMOVE BOT =================
 
@@ -396,41 +248,106 @@ def remove_bot(message):
 
 def remove_bot_process(message):
 
-    username = message.text.replace("@","")
+    username = message.text.replace("@","").strip()
 
     try:
 
-        bot_data = bots_collection.find_one({"username":username})
+        bot_data = bots_collection.find_one({
+            "username": username,
+            "owner": message.from_user.id,
+            "active": True
+        })
 
         if not bot_data:
 
             bot.send_message(
                 message.chat.id,
-                "❌ Bot not found"
-            )
-            return
-
-        if bot_data["owner"] != message.from_user.id:
-
-            bot.send_message(
-                message.chat.id,
-                "❌ You are not owner of this bot"
+                "❌ Bot not found or you are not owner"
             )
             return
 
         bots_collection.update_one(
-            {"username":username},
-            {"$set":{"active":False}}
+            {"username": username},
+            {"$set": {"active": False}}
         )
 
         bot.send_message(
             message.chat.id,
-            f"✅ @{username} removed and disabled"
+            f"✅ @{username} removed successfully"
         )
 
     except Exception as e:
 
         print("Remove bot error:", e)
+
+        bot.send_message(
+            message.chat.id,
+            "❌ Error removing bot"
+        )
+
+
+# ================= VERIFY API =================
+
+@app.route("/verify")
+def verify():
+
+    user_id = request.args.get("user_id")
+
+    if not user_id:
+
+        return jsonify({
+            "status": "error"
+        })
+
+    try:
+
+        channels = channels_collection.find({"active": True})
+
+        not_joined = []
+
+        for ch in channels:
+
+            username = ch.get("username")
+
+            try:
+
+                member = bot.get_chat_member(
+                    username,
+                    int(user_id)
+                )
+
+                if member.status not in [
+                    "member",
+                    "administrator",
+                    "creator"
+                ]:
+
+                    not_joined.append(username)
+
+            except:
+
+                not_joined.append(username)
+
+        if len(not_joined) == 0:
+
+            return jsonify({
+                "status": "joined"
+            })
+
+        else:
+
+            return jsonify({
+                "status": "not_joined",
+                "channels": not_joined
+            })
+
+    except Exception as e:
+
+        print("Verify API error:", e)
+
+        return jsonify({
+            "status": "error"
+        })
 
 
 # ================= STATS =================
@@ -445,13 +362,15 @@ def stats(message):
 
         total_users = users_collection.count_documents({})
 
-        total_bots = bots_collection.count_documents({})
+        total_bots = bots_collection.count_documents({
+            "active": True
+        })
 
         text = f"""
 📊 System Statistics
 
-👤 Total Users: {total_users}
-🤖 Total Bots: {total_bots}
+👤 Users: {total_users}
+🤖 Bots: {total_bots}
 """
 
         bot.send_message(
@@ -464,54 +383,7 @@ def stats(message):
         print("Stats error:", e)
 
 
-# ================= VERIFY API =================
-
-@app.route("/verify")
-def verify():
-
-    user_id = request.args.get("user_id")
-
-    if not user_id:
-
-        return jsonify({
-            "status":"error"
-        })
-
-    try:
-
-        active_channels = channels_collection.count_documents({"active": True})
-
-        if active_channels == 0:
-
-            return jsonify({
-                "status":"joined"
-            })
-
-        not_joined = check_channels(user_id)
-
-        if not not_joined:
-
-            return jsonify({
-                "status":"joined"
-            })
-
-        else:
-
-            return jsonify({
-                "status":"not_joined",
-                "channels":not_joined
-            })
-
-    except Exception as e:
-
-        print("Verify API error:", e)
-
-        return jsonify({
-            "status":"error"
-        })
-
-
-# ================= RUN BOT =================
+# ================= BOT RUN =================
 
 def run_bot():
 
@@ -532,21 +404,21 @@ def run_bot():
             time.sleep(5)
 
 
-# ================= START =================
+# ================= START SYSTEM =================
 
 if __name__ == "__main__":
 
     print("🚀 Main Bot Running...")
-    print("🌐 Verify API Running...")
+    print("🌐 API Running...")
 
     threading.Thread(
         target=run_bot,
         daemon=True
     ).start()
 
-    port = int(os.environ.get("PORT",5000))
+    port = int(os.environ.get("PORT", 5000))
 
     app.run(
         host="0.0.0.0",
         port=port
-    )
+        )
