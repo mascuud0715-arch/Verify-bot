@@ -307,6 +307,8 @@ def add_bot(message):
 
 # ================= SAVE BOT =================
 
+# ================= SAVE BOT =================
+
 def save_bot(message):
 
     token = message.text.strip()
@@ -322,17 +324,25 @@ def save_bot(message):
     try:
 
         test_bot = telebot.TeleBot(token)
+
         me = test_bot.get_me()
 
         username = me.username
 
-        bots_collection.insert_one({
-            "token": token,
-            "username": username,
-            "owner": message.from_user.id,
-            "active": True,
-            "created": time.time()
-        })
+        # Save bot to database
+        bots_collection.update_one(
+            {"token": token},
+            {
+                "$set": {
+                    "token": token,
+                    "username": username,
+                    "owner": message.from_user.id,
+                    "active": True,
+                    "created": time.time()
+                }
+            },
+            upsert=True
+        )
 
         bot.send_message(
             message.chat.id,
@@ -340,8 +350,13 @@ def save_bot(message):
 
 🤖 Bot: @{username}
 
-Runner will start it automatically."""
+🚀 Your bot will automatically become a TikTok downloader.
+
+Send any TikTok link to your bot and it will download instantly.
+"""
         )
+
+        print("New bot added:", username)
 
     except Exception as e:
 
@@ -349,7 +364,7 @@ Runner will start it automatically."""
 
         bot.send_message(
             message.chat.id,
-            "❌ Invalid bot token or bot not started.\nStart the bot first then send token."
+            "❌ Invalid bot token.\nMake sure you started the bot first."
         )
 
 # ================= MY BOTS =================
