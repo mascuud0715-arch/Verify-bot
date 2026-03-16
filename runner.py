@@ -26,7 +26,7 @@ downloads_collection = db["downloads"]
 codes_collection = db["codes"]
 system_collection = db["system"]
 
-# ================= HTTP SESSION (SUPER FAST) =================
+# ================= HTTP SESSION =================
 
 session = requests.Session()
 
@@ -111,93 +111,101 @@ def bots_enabled():
 
 def download_tiktok(url):
 
+    apis = [
+        f"https://tikwm.com/api/?url={url}",
+        f"https://www.tikwm.com/api/?url={url}",
+        f"https://tikwm.com/api/?hd=1&url={url}"
+    ]
+
+    headers = {
+        "User-Agent": "Mozilla/5.0"
+    }
+
+    for api in apis:
+
+        for i in range(5):
+
+            try:
+
+                r = session.get(api, headers=headers, timeout=25)
+
+                data = r.json()
+
+                if data.get("code") != 0:
+                    continue
+
+                d = data["data"]
+
+                if d.get("images"):
+
+                    return {
+                        "type": "photo",
+                        "media": d["images"]
+                    }
+
+                if d.get("play"):
+
+                    return {
+                        "type": "video",
+                        "media": d["play"]
+                    }
+
+            except Exception as e:
+                print("TikTok API error:", e)
+
+    return None
+
+# ================= DOWNLOAD VIDEO =================
+
+def download_video(url):
+
     for i in range(3):
 
         try:
 
-            api = f"https://tikwm.com/api/?url={url}"
+            r = session.get(url, stream=True, timeout=90)
 
-            headers = {
-                "User-Agent": "Mozilla/5.0"
-            }
+            with tempfile.NamedTemporaryFile(delete=False) as f:
 
-            r = session.get(api, headers=headers, timeout=30)
+                for chunk in r.iter_content(1024 * 1024):
 
-            data = r.json()
+                    if chunk:
+                        f.write(chunk)
 
-            if data.get("code") != 0:
-                time.sleep(0.5)
-                continue
-
-            d = data["data"]
-
-            if d.get("images"):
-
-                return {
-                    "type": "photo",
-                    "media": d["images"]
-                }
-
-            if d.get("play"):
-
-                return {
-                    "type": "video",
-                    "media": d["play"]
-                }
+                return f.name
 
         except Exception as e:
 
-            print("TikTok API error:", e)
+            print("Video download error:", e)
+            time.sleep(1)
 
     return None
-
-    # ================= DOWNLOAD VIDEO =================
-
-def download_video(url):
-
-    try:
-
-        r = session.get(url, stream=True, timeout=90)
-
-        with tempfile.NamedTemporaryFile(delete=False) as f:
-
-            for chunk in r.iter_content(1024 * 1024):
-
-                if chunk:
-                    f.write(chunk)
-
-            return f.name
-
-    except Exception as e:
-
-        print("Video download error:", e)
-
-    return None
-
 
 # ================= DOWNLOAD PHOTO =================
 
 def download_photo(url):
 
-    try:
+    for i in range(3):
 
-        r = session.get(url, stream=True, timeout=60)
+        try:
 
-        with tempfile.NamedTemporaryFile(delete=False) as f:
+            r = session.get(url, stream=True, timeout=60)
 
-            for chunk in r.iter_content(512 * 1024):
+            with tempfile.NamedTemporaryFile(delete=False) as f:
 
-                if chunk:
-                    f.write(chunk)
+                for chunk in r.iter_content(512 * 1024):
 
-            return f.name
+                    if chunk:
+                        f.write(chunk)
 
-    except Exception as e:
+                return f.name
 
-        print("Photo download error:", e)
+        except Exception as e:
+
+            print("Photo download error:", e)
+            time.sleep(1)
 
     return None
-
 
 # ================= PROCESS DOWNLOAD =================
 
@@ -252,10 +260,7 @@ def process_download(bot, chat_id, uid, url):
                     supports_streaming=True
                 )
 
-            bot.send_message(
-                chat_id,
-                "Created: @Verify_yourbot"
-            )
+            bot.send_message(chat_id, "Created: @Verify_yourbot")
 
             os.remove(path)
 
@@ -264,7 +269,7 @@ def process_download(bot, chat_id, uid, url):
                 "user": uid
             })
 
-        # ===== PHOTO SLIDESHOW =====
+        # ===== PHOTO =====
 
         elif result["type"] == "photo":
 
@@ -277,17 +282,11 @@ def process_download(bot, chat_id, uid, url):
 
                 with open(path, "rb") as p:
 
-                    bot.send_photo(
-                        chat_id,
-                        p
-                    )
+                    bot.send_photo(chat_id, p)
 
                 os.remove(path)
 
-            bot.send_message(
-                chat_id,
-                "Created: @Verify_yourbot"
-            )
+            bot.send_message(chat_id, "Created: @Verify_yourbot")
 
             downloads_collection.insert_one({
                 "type": "photo",
@@ -299,7 +298,6 @@ def process_download(bot, chat_id, uid, url):
         print("Download error:", e)
 
         bot.send_message(chat_id, "❌ Error downloading")
-
 
 # ================= START USER BOT =================
 
@@ -343,8 +341,6 @@ Create your own downloader:
 @Verify_yourbot"""
             )
 
-        # ===== TIKTOK LINK =====
-
         @bot.message_handler(func=lambda m: m.text and ("tiktok.com" in m.text or "vt.tiktok.com" in m.text))
         def tiktok(message):
 
@@ -371,7 +367,6 @@ Create your own downloader:
 
         print("❌ Bot start error:", e)
 
-
 # ================= RUNNER LOOP =================
 
 print("🚀 Runner System Started...")
@@ -385,8 +380,6 @@ while True:
         bots = list(bots_collection.find())
 
         active_tokens = []
-
-        # ===== CLOSE BOTS =====
 
         if not bots_status:
 
@@ -404,8 +397,6 @@ while True:
 
             time.sleep(10)
             continue
-
-        # ===== START BOTS (BATCH START) =====
 
         for b in bots:
 
@@ -442,8 +433,6 @@ while True:
                         del running_bots[token]
                     except:
                         pass
-
-        # ===== REMOVE BOTS =====
 
         for token in list(running_bots.keys()):
 
