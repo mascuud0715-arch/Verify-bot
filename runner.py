@@ -324,14 +324,17 @@ def process_download(bot, chat_id, uid, url):
 
             with open(path, "rb") as v:
 
-                bot.send_video(
-                chat_id,
-                  v,
-          caption=f"""Via @{bot_username}
+    bot.send_video(
+        chat_id,
+        v,
+        caption=f"Via @{bot_username}",
+        supports_streaming=True
+    )
 
-             Created: @Verify_yourbot""",
-             supports_streaming=True
-                )
+bot.send_message(
+    chat_id,
+    "Created: @Verify_yourbot"
+)
 
             try:
                 os.remove(path)
