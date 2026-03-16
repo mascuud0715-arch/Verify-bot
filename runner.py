@@ -49,7 +49,7 @@ session.mount("https://", adapter)
 
 # ================= THREAD POOL =================
 
-download_pool = ThreadPoolExecutor(max_workers=500)
+download_pool = ThreadPoolExecutor(max_workers=20)
 
 # ================= SYSTEM STATUS =================
 
@@ -382,7 +382,7 @@ def start_user_bot(token):
             bot = telebot.TeleBot(
                 token,
                 threaded=True,
-                num_threads=100
+                num_threads=10
             )
 
             running_bots[token] = bot
@@ -546,7 +546,7 @@ while True:
                     daemon=True
                 ).start()
 
-                time.sleep(0.2)
+                time.sleep(2)
 
 
         # ===== REMOVE BOT =====
