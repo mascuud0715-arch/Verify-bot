@@ -13,7 +13,7 @@ MONGO_URL = os.getenv("MONGO_URL")
 
 ADMIN_ID = 7983838654
 
-# ================= TELEBOT =================
+# ================= TELEGRAM BOT =================
 
 bot = telebot.TeleBot(
     TOKEN,
@@ -24,7 +24,7 @@ bot = telebot.TeleBot(
 
 client = MongoClient(
     MONGO_URL,
-    maxPoolSize=100
+    maxPoolSize=200
 )
 
 db = client["verify_system"]
@@ -34,8 +34,13 @@ users_collection = db["users"]
 channels_collection = db["channels"]
 system_collection = db["system"]
 
+# indexes (speed)
 bots_collection.create_index("token")
+bots_collection.create_index("username")
 bots_collection.create_index("owner")
+
+users_collection.create_index("user_id")
+channels_collection.create_index("username")
 
 # ================= INIT SYSTEM =================
 
@@ -56,7 +61,6 @@ def init_system():
     except Exception as e:
 
         print("Init system error:", e)
-
 
 init_system()
 
@@ -144,7 +148,7 @@ def check_channels(user_id):
 
     return not_joined
 
-# ================= CHANNELS API =================
+# ================= CHANNEL API =================
 
 @app.route("/channels")
 def get_channels():
@@ -204,7 +208,7 @@ def send_force_join(chat_id):
 
     bot.send_message(
         chat_id,
-        "⚠️ Please join all channels to continue",
+        "⚠️ Please join all required channels",
         reply_markup=kb
     )
 
@@ -246,25 +250,25 @@ def start(message):
         print("Start check error:", e)
 
     text = """
-🤖 Welcome to Verify Bot System
+🤖 Welcome to Bot System
 
-This system allows you to connect your own Telegram bot and turn it into a powerful TikTok downloader.
+You can connect your own Telegram bot and turn it into a **TikTok downloader**.
 
-📥 What your bot will do:
-• Download TikTok videos
-• Download TikTok photo slides
-• Work automatically for your users
-• Show download credits via your bot
+📥 Features your bot will have:
 
-⚙️ How to setup your bot:
+• Download TikTok videos  
+• Download TikTok photo slides  
+• Work automatically for users  
+• Ultra fast downloads  
 
-1️⃣ Create a bot using @BotFather
-2️⃣ Copy the Bot Token
-3️⃣ Click ➕ Add Bot and send the token
+⚙️ Setup Steps
 
-🚀 After adding your bot, it will start automatically and become a TikTok downloader.
+1️⃣ Create bot via @BotFather  
+2️⃣ Copy Bot Token  
+3️⃣ Click ➕ Add Bot  
+4️⃣ Send token  
 
-Choose an option below to continue.
+🚀 Your bot will start automatically.
 """
 
     bot.send_message(
@@ -341,6 +345,7 @@ def save_bot(message):
         username = me.username
 
         if not username:
+
             bot.send_message(
                 message.chat.id,
                 "❌ Could not detect bot username"
@@ -348,7 +353,7 @@ def save_bot(message):
             return
 
         bots_collection.update_one(
-            {"token": token},
+            {"username": username},
             {
                 "$set": {
                     "token": token,
@@ -363,11 +368,11 @@ def save_bot(message):
 
         bot.send_message(
             message.chat.id,
-            f"""✅ Bot Added Successfully
+            f"""✅ Bot Added
 
-🤖 Bot: @{username}
+🤖 @{username}
 
-🚀 Your bot is now connected to the downloader system.
+Your bot is now connected to downloader system.
 """
         )
 
@@ -380,7 +385,7 @@ def save_bot(message):
         bot.send_message(
             message.chat.id,
             "❌ Invalid token or Telegram API error"
-        )
+    )
 
 # ================= MY BOTS =================
 
@@ -409,7 +414,7 @@ def my_bots(message):
 
         if not found:
 
-            text = "❌ No bots yet"
+            text = "❌ You don't have any bots yet"
 
         bot.send_message(
             message.chat.id,
@@ -419,6 +424,7 @@ def my_bots(message):
     except Exception as e:
 
         print("My bots error:", e)
+
 
 # ================= REMOVE BOT =================
 
@@ -435,9 +441,10 @@ def remove_bot(message):
         remove_bot_process
     )
 
+
 def remove_bot_process(message):
 
-    username = message.text.replace("@", "")
+    username = message.text.replace("@", "").strip()
 
     try:
 
@@ -465,7 +472,7 @@ def remove_bot_process(message):
 
         bot.send_message(
             message.chat.id,
-            f"✅ @{username} removed completely from system"
+            f"✅ @{username} removed from system"
         )
 
         print("Bot removed:", username)
@@ -474,7 +481,8 @@ def remove_bot_process(message):
 
         print("Remove bot error:", e)
 
-# ================= STATS =================
+
+# ================= ADMIN STATS =================
 
 @bot.message_handler(commands=["stats"])
 def stats(message):
@@ -490,8 +498,8 @@ def stats(message):
         text = f"""
 📊 System Statistics
 
-👤 Total Users: {total_users}
-🤖 Total Bots: {total_bots}
+👤 Users: {total_users}
+🤖 Bots: {total_bots}
 """
 
         bot.send_message(
@@ -502,6 +510,7 @@ def stats(message):
     except Exception as e:
 
         print("Stats error:", e)
+
 
 # ================= VERIFY API =================
 
@@ -516,11 +525,14 @@ def verify():
 
     try:
 
-        active_channels = channels_collection.count_documents({"active": True})
+        active_channels = channels_collection.count_documents(
+            {"active": True}
+        )
 
         if active_channels == 0:
 
             return jsonify({"status": "joined"})
+
 
         not_joined = check_channels(user_id)
 
@@ -541,7 +553,8 @@ def verify():
 
         return jsonify({"status": "error"})
 
-# ================= RUN BOT =================
+
+# ================= RUN MAIN BOT =================
 
 def run_bot():
 
@@ -549,7 +562,7 @@ def run_bot():
 
         try:
 
-            print("🤖 Verify Bot Running...")
+            print("🤖 Main Verify Bot Running...")
 
             bot.infinity_polling(
                 skip_pending=True,
@@ -563,13 +576,16 @@ def run_bot():
 
             time.sleep(5)
 
+
 # ================= START RUNNER =================
 
 def start_runner():
 
     try:
 
-        print("🚀 Starting Runner System")
+        import running
+
+        print("🚀 Starting Multi Bot Runner")
 
         threading.Thread(
             target=running.start_runner,
@@ -580,18 +596,26 @@ def start_runner():
 
         print("Runner start error:", e)
 
-# ================= START =================
+
+# ================= MAIN =================
 
 if __name__ == "__main__":
 
+    # start downloader bots runner
+    start_runner()
+
+    # start main bot
     threading.Thread(
         target=run_bot,
         daemon=True
     ).start()
 
+    # start web api
     port = int(os.environ.get("PORT", 5000))
+
+    print("🌐 Web API Running on port", port)
 
     app.run(
         host="0.0.0.0",
         port=port
-        )
+    )
