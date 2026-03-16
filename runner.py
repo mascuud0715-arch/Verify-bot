@@ -292,7 +292,7 @@ def process_download(bot, chat_id, uid, url):
             return
 
 
-        bot.send_message(chat_id, "⚡ Downloading...")
+        msg = bot.send_message(chat_id, "⚡ Downloading...")
 
 
         # ===== GET MEDIA =====
