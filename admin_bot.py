@@ -257,7 +257,7 @@ def remove_bot_start(call):
 
     msg = bot.send_message(
         call.message.chat.id,
-        "Send bot username to remove\nExample:\n@mybot"
+        "🗑 Send bot username to remove\n\nExample:\n@mybot"
     )
 
     bot.register_next_step_handler(msg, remove_bot_process)
@@ -269,7 +269,7 @@ def remove_bot_start(call):
 
 def remove_bot_process(message):
 
-    username = message.text.replace("@","").strip()
+    username = message.text.replace("@", "").strip()
 
     bot_data = bots_collection.find_one({"username": username})
 
@@ -277,15 +277,32 @@ def remove_bot_process(message):
 
         bot.send_message(
             message.chat.id,
-            "❌ Bot not found"
+            "❌ Bot not found in system"
         )
         return
 
+    # delete bot from bots collection
     bots_collection.delete_one({"username": username})
+
+    # delete downloads related to this bot
+    downloads_collection.delete_many({"bot_username": username})
+
+    # optional: remove bot users data
+    users_collection.update_many(
+        {},
+        {"$pull": {"bots": username}}
+    )
 
     bot.send_message(
         message.chat.id,
-        f"✅ Bot @{username} removed from system"
+        f"""
+✅ BOT REMOVED SUCCESSFULLY
+
+🤖 Username: @{username}
+🔑 API Token: Deleted
+📦 Downloads: Cleaned
+🚫 Bot cannot work anymore
+"""
     )
 
 # ==============================
