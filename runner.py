@@ -292,6 +292,8 @@ def process_download(bot, chat_id, uid, url):
             return
 
 
+        bot.send_chat_action(chat_id, "uploading file...")
+
         msg = bot.send_message(chat_id, "⚡ Downloading...")
 
 
@@ -309,58 +311,63 @@ def process_download(bot, chat_id, uid, url):
 
 
         # ===== VIDEO =====
+        # ===== VIDEO =====
 
-        if result["type"] == "video":
+if result["type"] == "video":
 
-            video_url = result["media"]
+    video_url = result["media"]
 
-            path = download_file(video_url)
+    path = download_file(video_url)
 
-            if not path:
+    if not path:
+        bot.send_message(chat_id, "❌ Video failed")
+        return
 
-                bot.send_message(chat_id, "❌ Video failed")
-                return
+    # SHOW UPLOADING
+    bot.send_chat_action(chat_id, "upload_video")
 
+    with open(path, "rb") as v:
 
-            with open(path, "rb") as v:
+        bot.send_video(
+            chat_id,
+            v,
+            caption=f"Via @{bot_username}",
+            supports_streaming=True
+        )
 
-    bot.send_video(
-        chat_id,
-        v,
-        caption=f"Via @{bot_username}",
-        supports_streaming=True
-    )
+    bot.send_message(chat_id, "Created: @Verify_yourbot")
 
-bot.send_message(
-    chat_id,
-    "Created: @Verify_yourbot"
-)
+    # DELETE DOWNLOADING MESSAGE
+    try:
+        bot.delete_message(chat_id, msg.message_id)
+    except:
+        pass
 
-            try:
-                os.remove(path)
-            except:
-                pass
+    try:
+        os.remove(path)
+    except:
+        pass
 
 
         # ===== PHOTO =====
-
         elif result["type"] == "photo":
 
-            for img in result["media"]:
+    for img in result["media"]:
 
-                path = download_file(img)
+        path = download_file(img)
 
-                if not path:
-                    continue
+        if not path:
+            continue
 
-                with open(path, "rb") as p:
+        bot.send_chat_action(chat_id, "upload_photo")
 
-                    bot.send_photo(chat_id, p)
+        with open(path, "rb") as p:
+            bot.send_photo(chat_id, p)
 
-                try:
-                    os.remove(path)
-                except:
-                    pass
+        try:
+            os.remove(path)
+        except:
+            pass
 
 
         # ===== SAVE DOWNLOAD =====
