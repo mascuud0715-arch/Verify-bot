@@ -28,13 +28,13 @@ codes_collection = db["codes"]
 system_collection = db["system"]
 channels_collection = db["channels"]
 
-# ================= HTTP SESSION =================
+# ================= FAST HTTP SESSION =================
 
 session = requests.Session()
 
 adapter = requests.adapters.HTTPAdapter(
-    pool_connections=1000,
-    pool_maxsize=1000,
+    pool_connections=2000,
+    pool_maxsize=2000,
     max_retries=3
 )
 
@@ -88,6 +88,14 @@ def system_status():
 
     return data.get("bots_status", True), data.get("verify_status", True)
 
+# ================= BOT STATUS =================
+
+def bots_enabled():
+
+    bots_status, verify_status = system_status()
+
+    return bots_status
+
 # ================= VERIFY USER =================
 
 def verify_user(uid):
@@ -105,17 +113,6 @@ def verify_user(uid):
     if data.get("expire", 0) < time.time():
 
         codes_collection.delete_one({"user_id": uid})
-        return False
-
-    return True
-
-# ================= BOT STATUS =================
-
-def bots_enabled():
-
-    bots_status, verify_status = system_status()
-
-    if bots_status == False:
         return False
 
     return True
@@ -196,11 +193,11 @@ def send_join(bot, chat_id, channels, url):
 
     bot.send_message(
         chat_id,
-        "⚠️ You must join channels first",
+        "⚠️ Join channels first",
         reply_markup=kb
     )
 
-# ================= TIKTOK API =================
+# ================= FAST TIKTOK API =================
 
 def download_tiktok(url):
 
@@ -209,13 +206,19 @@ def download_tiktok(url):
         f"https://www.tikwm.com/api/?hd=1&url={url}"
     ]
 
-    headers = {"User-Agent": "Mozilla/5.0"}
+    headers = {
+        "User-Agent": "Mozilla/5.0"
+    }
 
     for api in apis:
 
         try:
 
-            r = session.get(api, headers=headers, timeout=15)
+            r = session.get(
+                api,
+                headers=headers,
+                timeout=10
+            )
 
             data = r.json()
 
@@ -244,69 +247,59 @@ def download_tiktok(url):
 
     return None
 
-    # ================= DOWNLOAD VIDEO =================
+# ================= FAST VIDEO DOWNLOAD =================
 
 def download_video(url):
 
-    for i in range(5):
+    try:
 
-        try:
+        r = session.get(
+            url,
+            stream=True,
+            timeout=60
+        )
 
-            r = session.get(
-                url,
-                stream=True,
-                timeout=60
-            )
+        with tempfile.NamedTemporaryFile(delete=False) as f:
 
-            with tempfile.NamedTemporaryFile(delete=False) as f:
+            for chunk in r.iter_content(1024 * 1024):
 
-                for chunk in r.iter_content(1024 * 512):
+                if chunk:
+                    f.write(chunk)
 
-                    if chunk:
-                        f.write(chunk)
+            return f.name
 
-                return f.name
+    except Exception as e:
 
-        except Exception as e:
-
-            print("Video download error:", e)
-
-            time.sleep(1)
+        print("Video error:", e)
 
     return None
 
-
-# ================= DOWNLOAD PHOTO =================
+# ================= FAST PHOTO DOWNLOAD =================
 
 def download_photo(url):
 
-    for i in range(3):
+    try:
 
-        try:
+        r = session.get(
+            url,
+            stream=True,
+            timeout=60
+        )
 
-            r = session.get(
-                url,
-                stream=True,
-                timeout=60
-            )
+        with tempfile.NamedTemporaryFile(delete=False) as f:
 
-            with tempfile.NamedTemporaryFile(delete=False) as f:
+            for chunk in r.iter_content(1024 * 512):
 
-                for chunk in r.iter_content(512 * 1024):
+                if chunk:
+                    f.write(chunk)
 
-                    if chunk:
-                        f.write(chunk)
+            return f.name
 
-                return f.name
+    except Exception as e:
 
-        except Exception as e:
-
-            print("Photo download error:", e)
-
-            time.sleep(1)
+        print("Photo error:", e)
 
     return None
-
 
 # ================= PROCESS DOWNLOAD =================
 
@@ -316,13 +309,13 @@ def process_download(bot, chat_id, uid, url):
 
         bot.send_message(
             chat_id,
-            "⛔ Bots are currently closed by admin."
+            "⛔ Bots are currently OFF by admin."
         )
         return
 
     try:
 
-        # VERIFY SYSTEM
+        # ===== VERIFY CHECK =====
 
         if not verify_user(uid):
 
@@ -332,17 +325,26 @@ def process_download(bot, chat_id, uid, url):
             )
             return
 
-        # FORCE JOIN
+
+        # ===== FORCE JOIN =====
 
         not_joined = check_force_join(bot, uid)
 
-        if not_joined:
+        if not not_joined:
+
+            pass
+
+        else:
 
             send_join(bot, chat_id, not_joined, url)
 
             return
 
-        bot.send_message(chat_id, "⏳ Downloading...")
+
+        bot.send_message(chat_id, "⚡ Downloading...")
+
+
+        # ===== GET MEDIA =====
 
         result = download_tiktok(url)
 
@@ -351,19 +353,29 @@ def process_download(bot, chat_id, uid, url):
             bot.send_message(chat_id, "❌ Download failed")
             return
 
+
         bot_username = bot.get_me().username
 
 
-        # ===== VIDEO =====
+        # ================= VIDEO =================
 
         if result["type"] == "video":
 
-            path = download_video(result["media"])
+            video_url = result["media"]
+
+            if not video_url.startswith("http"):
+
+                bot.send_message(chat_id, "❌ Invalid video")
+                return
+
+
+            path = download_video(video_url)
 
             if not path:
 
                 bot.send_message(chat_id, "❌ Video failed")
                 return
+
 
             with open(path, "rb") as v:
 
@@ -374,13 +386,14 @@ def process_download(bot, chat_id, uid, url):
                     supports_streaming=True
                 )
 
+
             try:
                 os.remove(path)
             except:
                 pass
 
 
-        # ===== PHOTO =====
+        # ================= PHOTO =================
 
         elif result["type"] == "photo":
 
@@ -401,6 +414,8 @@ def process_download(bot, chat_id, uid, url):
                     pass
 
 
+        # ===== SAVE DOWNLOAD =====
+
         try:
 
             downloads_collection.insert_one({
@@ -410,6 +425,7 @@ def process_download(bot, chat_id, uid, url):
 
         except:
             pass
+
 
     except Exception as e:
 
@@ -433,7 +449,7 @@ def start_user_bot(token):
             running_bots[token] = bot
 
 
-            # ===== START =====
+            # ===== START COMMAND =====
 
             @bot.message_handler(commands=["start"])
             def start(message):
@@ -453,14 +469,9 @@ message.chat.id,
 Features:
 • No watermark video
 • Photo slideshow download
-• Fast download
+• Very fast download
 
-Just send a TikTok link to begin.
-
-━━━━━━━━━━━━━━
-
-Create your own downloader:
-@Verify_yourbot
+Send a TikTok link to begin.
 """
                 )
 
@@ -523,11 +534,13 @@ Create your own downloader:
 
             print("🟢 Bot Started:", token)
 
+
             bot.infinity_polling(
                 skip_pending=True,
                 timeout=60,
                 long_polling_timeout=60
             )
+
 
         except Exception as e:
 
@@ -541,6 +554,7 @@ Create your own downloader:
 
 print("🚀 Runner Started")
 
+
 while True:
 
     try:
@@ -550,6 +564,9 @@ while True:
         bots = list(bots_collection.find({"active": True}))
 
         active_tokens = []
+
+
+        # ===== SYSTEM OFF =====
 
         if not bots_status:
 
@@ -607,6 +624,6 @@ while True:
         print("Runner error:", e)
 
 
-    # FAST SCAN
+    # ===== FAST SCAN =====
 
     time.sleep(3)
