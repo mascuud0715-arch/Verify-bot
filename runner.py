@@ -117,9 +117,7 @@ def download_tiktok(url):
         f"https://tikwm.com/api/?hd=1&url={url}"
     ]
 
-    headers = {
-        "User-Agent": "Mozilla/5.0"
-    }
+    headers = {"User-Agent": "Mozilla/5.0"}
 
     for api in apis:
 
@@ -127,7 +125,7 @@ def download_tiktok(url):
 
             try:
 
-                r = session.get(api, headers=headers, timeout=25)
+                r = session.get(api, headers=headers, timeout=20)
 
                 data = r.json()
 
@@ -137,21 +135,13 @@ def download_tiktok(url):
                 d = data["data"]
 
                 if d.get("images"):
-
-                    return {
-                        "type": "photo",
-                        "media": d["images"]
-                    }
+                    return {"type": "photo", "media": d["images"]}
 
                 if d.get("play"):
+                    return {"type": "video", "media": d["play"]}
 
-                    return {
-                        "type": "video",
-                        "media": d["play"]
-                    }
-
-            except Exception as e:
-                print("TikTok API error:", e)
+            except:
+                continue
 
     return None
 
@@ -159,24 +149,21 @@ def download_tiktok(url):
 
 def download_video(url):
 
-    for i in range(3):
+    for i in range(5):
 
         try:
 
-            r = session.get(url, stream=True, timeout=90)
+            r = session.get(url, stream=True, timeout=60)
 
             with tempfile.NamedTemporaryFile(delete=False) as f:
 
-                for chunk in r.iter_content(1024 * 1024):
-
+                for chunk in r.iter_content(1024 * 512):
                     if chunk:
                         f.write(chunk)
 
                 return f.name
 
-        except Exception as e:
-
-            print("Video download error:", e)
+        except:
             time.sleep(1)
 
     return None
