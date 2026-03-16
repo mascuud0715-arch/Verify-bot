@@ -347,14 +347,21 @@ def start_user_bot(token):
 
 message.chat.id,
 
-"""👋 Welcome to TikTok Downloader
+"""👋 Welcome to TikTok Downloader Bot
 
-Send any TikTok link
+📥 Send any TikTok link and I will download it instantly.
 
-Features
-• No watermark
-• Photo slideshow
+Features:
+• No watermark video
+• Photo slideshow download
 • Fast download
+
+Just send a TikTok link to begin.
+
+━━━━━━━━━━━━━━
+
+Create your own downloader:
+@Verify_yourbot
 """
                 )
 
