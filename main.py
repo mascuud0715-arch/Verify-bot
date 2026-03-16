@@ -459,15 +459,16 @@ def remove_bot_process(message):
             )
             return
 
-        bots_collection.update_one(
-            {"username": username},
-            {"$set": {"active": False}}
+        bots_collection.delete_one(
+            {"username": username}
         )
 
         bot.send_message(
             message.chat.id,
-            f"✅ @{username} removed and disabled"
+            f"✅ @{username} removed completely from system"
         )
+
+        print("Bot removed:", username)
 
     except Exception as e:
 
