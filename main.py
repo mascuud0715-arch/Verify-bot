@@ -578,6 +578,7 @@ def run_bot():
 
 
 # ================= START RUNNER =================
+# ================= START RUNNER =================
 
 def start_runner():
 
@@ -585,7 +586,7 @@ def start_runner():
 
         import running
 
-        print("🚀 Starting Multi Bot Runner")
+        print("🚀 Starting Runner System")
 
         threading.Thread(
             target=running.start_runner,
@@ -604,14 +605,8 @@ if __name__ == "__main__":
     # start downloader bots runner
     start_runner()
 
-    # start main bot
-    threading.Thread(
-        target=run_bot,
-        daemon=True
-    ).start()
-
-    # start web api
-    port = int(os.environ.get("PORT", 5000))
+    # start web api only
+    port = int(os.environ.get("PORT", 8080))
 
     print("🌐 Web API Running on port", port)
 
