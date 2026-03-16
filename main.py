@@ -17,15 +17,14 @@ ADMIN_ID = 7983838654
 
 bot = telebot.TeleBot(
     TOKEN,
-    threaded=True,
-    num_threads=100
+    threaded=False
 )
 
 # ================= DATABASE =================
 
 client = MongoClient(
     MONGO_URL,
-    maxPoolSize=200
+    maxPoolSize=100
 )
 
 db = client["verify_system"]
@@ -319,7 +318,6 @@ def add_bot(message):
         save_bot
     )
 
-
 # ================= SAVE BOT =================
 
 def save_bot(message):
@@ -358,7 +356,7 @@ def save_bot(message):
 
         bot.send_message(
             message.chat.id,
-            f"""✅ Bot Added Successfully
+f"""✅ Bot Added Successfully
 
 🤖 Bot: @{username}
 
@@ -377,7 +375,6 @@ Send any TikTok link to your bot and it will download instantly."""
             message.chat.id,
             "❌ Invalid bot token.\nMake sure you started the bot first."
         )
-
 
 # ================= MY BOTS =================
 
@@ -414,7 +411,6 @@ def my_bots(message):
 
         print("My bots error:", e)
 
-
 # ================= REMOVE BOT =================
 
 @bot.message_handler(func=lambda m: m.text == "❌ Remove Bot")
@@ -429,7 +425,6 @@ def remove_bot(message):
         msg,
         remove_bot_process
     )
-
 
 def remove_bot_process(message):
 
@@ -469,7 +464,6 @@ def remove_bot_process(message):
 
         print("Remove bot error:", e)
 
-
 # ================= STATS =================
 
 @bot.message_handler(commands=["stats"])
@@ -499,7 +493,6 @@ def stats(message):
 
         print("Stats error:", e)
 
-
 # ================= VERIFY API =================
 
 @app.route("/verify")
@@ -509,29 +502,21 @@ def verify():
 
     if not user_id:
 
-        return jsonify({
-            "status": "error"
-        })
+        return jsonify({"status": "error"})
 
     try:
 
-        active_channels = channels_collection.count_documents(
-            {"active": True}
-        )
+        active_channels = channels_collection.count_documents({"active": True})
 
         if active_channels == 0:
 
-            return jsonify({
-                "status": "joined"
-            })
+            return jsonify({"status": "joined"})
 
         not_joined = check_channels(user_id)
 
         if not not_joined:
 
-            return jsonify({
-                "status": "joined"
-            })
+            return jsonify({"status": "joined"})
 
         else:
 
@@ -544,13 +529,42 @@ def verify():
 
         print("Verify API error:", e)
 
-        return jsonify({
-            "status": "error"
-        })
+        return jsonify({"status": "error"})
 
+# ================= RUN BOT =================
 
-# ================= RUN MAIN BOT =================
+def run_bot():
 
-      print("Verify Bot Running...")
+    while True:
 
-      bot.infinity_polling(skip_pending=True)
+        try:
+
+            print("🤖 Verify Bot Running...")
+
+            bot.infinity_polling(
+                skip_pending=True,
+                timeout=30,
+                long_polling_timeout=30
+            )
+
+        except Exception as e:
+
+            print("Bot crashed:", e)
+
+            time.sleep(5)
+
+# ================= START =================
+
+if __name__ == "__main__":
+
+    threading.Thread(
+        target=run_bot,
+        daemon=True
+    ).start()
+
+    port = int(os.environ.get("PORT", 5000))
+
+    app.run(
+        host="0.0.0.0",
+        port=port
+        )
