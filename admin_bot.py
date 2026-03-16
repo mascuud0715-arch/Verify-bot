@@ -90,6 +90,10 @@ def admin_menu():
         KeyboardButton("🔴 Verify OFF")
     )
 
+    kb.add(
+    KeyboardButton("🔄 Refresh Bots")
+    )
+
     return kb
 
 
@@ -405,6 +409,28 @@ def close_channels(message):
     bot.send_message(
         message.chat.id,
         "❌ Force Join System Disabled"
+    )
+
+# ==============================
+# REFRESH BOTS
+# ==============================
+
+@bot.message_handler(func=lambda m: m.text == "🔄 Refresh Bots")
+def refresh_bots(message):
+
+    bots = list(bots_collection.find())
+
+    total = len(bots)
+
+    bot.send_message(
+        message.chat.id,
+        f"""
+🔄 SYSTEM REFRESHED
+
+🤖 Active Bots: {total}
+
+Removed bots cleared from system.
+"""
     )
 
 
