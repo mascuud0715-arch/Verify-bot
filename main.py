@@ -311,34 +311,25 @@ def save_bot(message):
 
     token = message.text.strip()
 
-    try:
-
-        # check duplicate
-        if bots_collection.find_one({"token": token}):
-
-            bot.send_message(
-                message.chat.id,
-                "⚠️ This bot is already added."
-            )
-            return
-
-        new_bot = telebot.TeleBot(token)
-
-        info = new_bot.get_me()
-
-        username = info.username
-
-        bots_collection.insert_one({
-            "token": token,
-            "username": username,
-            "owner": message.from_user.id,
-            "active": True,
-            "created": time.time()
-        })
+    if ":" not in token:
 
         bot.send_message(
             message.chat.id,
-            f"""✅ Bot Added Successfully
+            "❌ Invalid token format"
+        )
+        return
+
+    bots_collection.insert_one({
+        "token": token,
+        "owner": message.from_user.id,
+        "active": True,
+        "created": time.time()
+    })
+
+    bot.send_message(
+        message.chat.id,
+        "✅ Bot Added Successfully\n\nRunner will start it automatically."
+    )
 
 🤖 Bot: @{username}
 
