@@ -563,6 +563,23 @@ def run_bot():
 
             time.sleep(5)
 
+# ================= START RUNNER =================
+
+def start_runner():
+
+    try:
+
+        print("🚀 Starting Runner System")
+
+        threading.Thread(
+            target=running.start_runner,
+            daemon=True
+        ).start()
+
+    except Exception as e:
+
+        print("Runner start error:", e)
+
 # ================= START =================
 
 if __name__ == "__main__":
