@@ -41,7 +41,7 @@ session.mount("https://", adapter)
 
 # ================= THREAD POOL =================
 
-download_pool = ThreadPoolExecutor(max_workers=1000)
+download_pool = ThreadPoolExecutor(max_workers=3000)
 
 # ================= RUNNING BOTS =================
 
