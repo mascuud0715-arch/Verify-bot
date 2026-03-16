@@ -42,15 +42,22 @@ bots_collection.create_index("owner")
 
 def init_system():
 
-    data = system_collection.find_one({"name":"system"})
+    try:
 
-    if not data:
+        data = system_collection.find_one({"name": "system"})
 
-        system_collection.insert_one({
-            "name":"system",
-            "bots_status":True,
-            "verify_status":True
-        })
+        if not data:
+
+            system_collection.insert_one({
+                "name": "system",
+                "bots_status": True,
+                "verify_status": True
+            })
+
+    except Exception as e:
+
+        print("Init system error:", e)
+
 
 init_system()
 
@@ -67,7 +74,7 @@ def save_user(user):
         users_collection.update_one(
             {"user_id": user.id},
             {
-                "$set":{
+                "$set": {
                     "user_id": user.id,
                     "username": user.username
                 }
@@ -138,7 +145,7 @@ def check_channels(user_id):
 
     return not_joined
 
-# ================= GET CHANNELS API =================
+# ================= CHANNELS API =================
 
 @app.route("/channels")
 def get_channels():
@@ -147,7 +154,7 @@ def get_channels():
 
     try:
 
-        for ch in channels_collection.find({"active":True}):
+        for ch in channels_collection.find({"active": True}):
 
             username = ch.get("username")
 
@@ -159,7 +166,7 @@ def get_channels():
         print("Channel API error:", e)
 
     return jsonify({
-        "channels":channels
+        "channels": channels
     })
 
 # ================= FORCE JOIN =================
@@ -213,11 +220,15 @@ def start(message):
 
     try:
 
-        active_channels = channels_collection.count_documents({"active":True})
+        active_channels = channels_collection.count_documents(
+            {"active": True}
+        )
 
         if active_channels > 0:
 
-            not_joined = check_channels(message.from_user.id)
+            not_joined = check_channels(
+                message.from_user.id
+            )
 
             if not not_joined:
 
@@ -225,7 +236,10 @@ def start(message):
 
             else:
 
-                send_force_join(message.chat.id)
+                send_force_join(
+                    message.chat.id
+                )
+
                 return
 
     except Exception as e:
@@ -245,9 +259,9 @@ This system allows you to connect your own Telegram bot and turn it into a power
 
 ⚙️ How to setup your bot:
 
-1️⃣ Create a bot using @BotFather  
-2️⃣ Copy the Bot Token  
-3️⃣ Click ➕ Add Bot and send the token  
+1️⃣ Create a bot using @BotFather
+2️⃣ Copy the Bot Token
+3️⃣ Click ➕ Add Bot and send the token
 
 🚀 After adding your bot, it will start automatically and become a TikTok downloader.
 
@@ -305,7 +319,6 @@ def add_bot(message):
         save_bot
     )
 
-# ================= SAVE BOT =================
 
 # ================= SAVE BOT =================
 
@@ -329,7 +342,6 @@ def save_bot(message):
 
         username = me.username
 
-        # Save bot to database
         bots_collection.update_one(
             {"token": token},
             {
@@ -352,8 +364,7 @@ def save_bot(message):
 
 🚀 Your bot will automatically become a TikTok downloader.
 
-Send any TikTok link to your bot and it will download instantly.
-"""
+Send any TikTok link to your bot and it will download instantly."""
         )
 
         print("New bot added:", username)
@@ -366,6 +377,7 @@ Send any TikTok link to your bot and it will download instantly.
             message.chat.id,
             "❌ Invalid bot token.\nMake sure you started the bot first."
         )
+
 
 # ================= MY BOTS =================
 
@@ -393,11 +405,15 @@ def my_bots(message):
 
             text = "❌ No bots yet"
 
-        bot.send_message(message.chat.id, text)
+        bot.send_message(
+            message.chat.id,
+            text
+        )
 
     except Exception as e:
 
         print("My bots error:", e)
+
 
 # ================= REMOVE BOT =================
 
@@ -417,11 +433,11 @@ def remove_bot(message):
 
 def remove_bot_process(message):
 
-    username = message.text.replace("@","")
+    username = message.text.replace("@", "")
 
     try:
 
-        bot_data = bots_collection.find_one({"username":username})
+        bot_data = bots_collection.find_one({"username": username})
 
         if not bot_data:
 
@@ -440,8 +456,8 @@ def remove_bot_process(message):
             return
 
         bots_collection.update_one(
-            {"username":username},
-            {"$set":{"active":False}}
+            {"username": username},
+            {"$set": {"active": False}}
         )
 
         bot.send_message(
@@ -452,6 +468,7 @@ def remove_bot_process(message):
     except Exception as e:
 
         print("Remove bot error:", e)
+
 
 # ================= STATS =================
 
@@ -464,7 +481,6 @@ def stats(message):
     try:
 
         total_users = users_collection.count_documents({})
-
         total_bots = bots_collection.count_documents({})
 
         text = f"""
@@ -483,6 +499,7 @@ def stats(message):
 
         print("Stats error:", e)
 
+
 # ================= VERIFY API =================
 
 @app.route("/verify")
@@ -493,17 +510,19 @@ def verify():
     if not user_id:
 
         return jsonify({
-            "status":"error"
+            "status": "error"
         })
 
     try:
 
-        active_channels = channels_collection.count_documents({"active": True})
+        active_channels = channels_collection.count_documents(
+            {"active": True}
+        )
 
         if active_channels == 0:
 
             return jsonify({
-                "status":"joined"
+                "status": "joined"
             })
 
         not_joined = check_channels(user_id)
@@ -511,14 +530,14 @@ def verify():
         if not not_joined:
 
             return jsonify({
-                "status":"joined"
+                "status": "joined"
             })
 
         else:
 
             return jsonify({
-                "status":"not_joined",
-                "channels":not_joined
+                "status": "not_joined",
+                "channels": not_joined
             })
 
     except Exception as e:
@@ -526,10 +545,10 @@ def verify():
         print("Verify API error:", e)
 
         return jsonify({
-            "status":"error"
+            "status": "error"
         })
 
-# ================= RUN BOT =================
+
 # ================= RUN MAIN BOT =================
 
 def run_main():
