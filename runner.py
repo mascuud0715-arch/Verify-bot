@@ -381,15 +381,16 @@ def process_download(bot, chat_id, uid, url):
 
 def start_user_bot(token):
 
-    try:
+    while True:
+        try:
 
-        bot = telebot.TeleBot(
-            token,
-            threaded=True,
-            num_threads=10
-        )
+            bot = telebot.TeleBot(
+                token,
+                threaded=True,
+                num_threads=10
+            )
 
-        running_bots[token] = bot
+            running_bots[token] = bot
 
 
             # ===== START COMMAND =====
