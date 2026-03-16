@@ -39,9 +39,9 @@ pending_links = {}
 session = requests.Session()
 
 adapter = requests.adapters.HTTPAdapter(
-    pool_connections=1000,
-    pool_maxsize=1000,
-    max_retries=3
+    pool_connections=100,
+    pool_maxsize=100,
+    max_retries=2
 )
 
 session.mount("http://", adapter)
@@ -182,7 +182,7 @@ def send_join(bot, chat_id, channels, url):
 
     bot.send_message(
         chat_id,
-        "⚠️ Please join channels first",
+        "⚠️ Please join required channels first",
         reply_markup=kb
     )
 
@@ -241,7 +241,7 @@ def download_file(url):
 
         with tempfile.NamedTemporaryFile(delete=False) as f:
 
-            for chunk in r.iter_content(1024*1024):
+            for chunk in r.iter_content(1024*512):
 
                 if chunk:
                     f.write(chunk)
@@ -282,7 +282,11 @@ def process_download(bot, chat_id, uid, url):
 
         not_joined = check_force_join(bot, uid)
 
-        if not_joined:
+        if not not_joined:
+
+            pass
+
+        else:
 
             send_join(bot, chat_id, not_joined, url)
             return
@@ -398,28 +402,21 @@ def start_user_bot(token):
                 save_user(uid)
 
                 bot.send_message(
-
                     message.chat.id,
-
 """👋 Welcome to TikTok Downloader Bot
 
 📥 Send any TikTok link and I will download it instantly.
 
-Features:
+Features
 • No watermark
 • Slideshow download
 • Very fast
 
 Send link now.
+
+CREATED: @Verify_yourbot
 """
                 )
-
-            bot.send_message(
-
-                    message.chat.id,
-                """CREATED: @Verify_yourbot
-                """
-            )
 
 
             # ===== LINK HANDLER =====
