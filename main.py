@@ -383,7 +383,10 @@ def my_bots(message):
 
     try:
 
-        bots = bots_collection.find({"owner": message.from_user.id})
+        bots = bots_collection.find({
+            "owner": message.from_user.id,
+            "active": True
+        })
 
         text = "🤖 Your Bots\n\n"
 
