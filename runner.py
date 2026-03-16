@@ -15,7 +15,7 @@ MONGO_URL = os.getenv("MONGO_URL")
 
 client = MongoClient(
     MONGO_URL,
-    maxPoolSize=300
+    maxPoolSize=600
 )
 
 db = client["verify_system"]
@@ -26,13 +26,13 @@ downloads_collection = db["downloads"]
 codes_collection = db["codes"]
 system_collection = db["system"]
 
-# ================= HTTP SESSION =================
+# ================= HTTP SESSION (SUPER FAST) =================
 
 session = requests.Session()
 
 adapter = requests.adapters.HTTPAdapter(
-    pool_connections=500,
-    pool_maxsize=500,
+    pool_connections=1000,
+    pool_maxsize=1000,
     max_retries=3
 )
 
@@ -41,7 +41,7 @@ session.mount("https://", adapter)
 
 # ================= THREAD POOL =================
 
-download_pool = ThreadPoolExecutor(max_workers=700)
+download_pool = ThreadPoolExecutor(max_workers=1000)
 
 # ================= RUNNING BOTS =================
 
@@ -75,23 +75,20 @@ def system_status():
 
     return data.get("bots_status", True), data.get("verify_status", True)
 
-# ================= CHECK VERIFY =================
+# ================= VERIFY USER =================
 
 def verify_user(uid):
 
     bots_status, verify_status = system_status()
 
-    # VERIFY OFF → qof walba wuu isticmaali karaa
     if verify_status == False:
         return True
 
-    # VERIFY ON → check code
     data = codes_collection.find_one({"user_id": uid})
 
     if not data:
         return False
 
-    # expire check
     if data.get("expire", 0) < time.time():
 
         codes_collection.delete_one({"user_id": uid})
@@ -99,7 +96,7 @@ def verify_user(uid):
 
     return True
 
-# ================= CHECK BOT STATUS =================
+# ================= BOT STATUS =================
 
 def bots_enabled():
 
@@ -114,7 +111,7 @@ def bots_enabled():
 
 def download_tiktok(url):
 
-    for i in range(5):
+    for i in range(3):
 
         try:
 
@@ -124,18 +121,16 @@ def download_tiktok(url):
                 "User-Agent": "Mozilla/5.0"
             }
 
-            r = session.get(api, headers=headers, timeout=60)
+            r = session.get(api, headers=headers, timeout=30)
 
             data = r.json()
 
             if data.get("code") != 0:
-
-                time.sleep(1)
+                time.sleep(0.5)
                 continue
 
             d = data["data"]
 
-            # PHOTO SLIDESHOW
             if d.get("images"):
 
                 return {
@@ -143,7 +138,6 @@ def download_tiktok(url):
                     "media": d["images"]
                 }
 
-            # VIDEO
             if d.get("play"):
 
                 return {
@@ -155,18 +149,15 @@ def download_tiktok(url):
 
             print("TikTok API error:", e)
 
-            time.sleep(1)
-
     return None
 
-
-# ================= DOWNLOAD VIDEO =================
+    # ================= DOWNLOAD VIDEO =================
 
 def download_video(url):
 
     try:
 
-        r = session.get(url, stream=True, timeout=120)
+        r = session.get(url, stream=True, timeout=90)
 
         with tempfile.NamedTemporaryFile(delete=False) as f:
 
@@ -194,7 +185,7 @@ def download_photo(url):
 
         with tempfile.NamedTemporaryFile(delete=False) as f:
 
-            for chunk in r.iter_content(1024 * 1024):
+            for chunk in r.iter_content(512 * 1024):
 
                 if chunk:
                     f.write(chunk)
@@ -241,7 +232,7 @@ def process_download(bot, chat_id, uid, url):
 
         bot_username = bot.get_me().username
 
-        # ================= VIDEO =================
+        # ===== VIDEO =====
 
         if result["type"] == "video":
 
@@ -273,7 +264,7 @@ def process_download(bot, chat_id, uid, url):
                 "user": uid
             })
 
-        # ================= PHOTO =================
+        # ===== PHOTO SLIDESHOW =====
 
         elif result["type"] == "photo":
 
@@ -319,7 +310,7 @@ def start_user_bot(token):
         bot = telebot.TeleBot(
             token,
             threaded=True,
-            num_threads=120
+            num_threads=100
         )
 
         running_bots[token] = bot
@@ -414,7 +405,7 @@ while True:
             time.sleep(10)
             continue
 
-        # ===== START BOTS =====
+        # ===== START BOTS (BATCH START) =====
 
         for b in bots:
 
@@ -435,6 +426,8 @@ while True:
                         args=(token,),
                         daemon=True
                     ).start()
+
+                    time.sleep(0.1)
 
             else:
 
