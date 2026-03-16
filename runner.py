@@ -325,10 +325,12 @@ def process_download(bot, chat_id, uid, url):
             with open(path, "rb") as v:
 
                 bot.send_video(
-                    chat_id,
-                    v,
-                    caption=f"Via @{bot_username}",
-                    supports_streaming=True
+                chat_id,
+                  v,
+          caption=f"""Via @{bot_username}
+
+             Created: @Verify_yourbot""",
+             supports_streaming=True
                 )
 
             try:
