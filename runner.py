@@ -15,7 +15,6 @@ MONGO_URL = os.getenv("MONGO_URL")
 # ================= DATABASE =================
 
 client = MongoClient(MONGO_URL)
-
 db = client["verify_system"]
 
 bots_collection = db["bots"]
@@ -34,22 +33,22 @@ running_bots = {}
 verified_users = {}
 pending_links = {}
 
+# ================= THREAD POOL =================
+
+download_pool = ThreadPoolExecutor(max_workers=100)
+
 # ================= HTTP SESSION =================
 
 session = requests.Session()
 
 adapter = requests.adapters.HTTPAdapter(
-    pool_connections=100,
-    pool_maxsize=100,
+    pool_connections=200,
+    pool_maxsize=200,
     max_retries=2
 )
 
 session.mount("http://", adapter)
 session.mount("https://", adapter)
-
-# ================= THREAD POOL =================
-
-download_pool = ThreadPoolExecutor(max_workers=20)
 
 # ================= SYSTEM STATUS =================
 
@@ -79,13 +78,11 @@ def system_status():
 def save_user(uid):
 
     try:
-
         users_collection.update_one(
             {"user_id": uid},
             {"$set": {"user_id": uid}},
             upsert=True
         )
-
     except:
         pass
 
@@ -241,7 +238,7 @@ def download_file(url):
 
         with tempfile.NamedTemporaryFile(delete=False) as f:
 
-            for chunk in r.iter_content(1024*512):
+            for chunk in r.iter_content(1024 * 512):
 
                 if chunk:
                     f.write(chunk)
@@ -251,6 +248,7 @@ def download_file(url):
     except:
         return None
 
+
 # ================= PROCESS DOWNLOAD =================
 
 def process_download(bot, chat_id, uid, url):
@@ -259,10 +257,7 @@ def process_download(bot, chat_id, uid, url):
 
     if not bots_status:
 
-        bot.send_message(
-            chat_id,
-            "⛔ Bots are currently OFF by admin."
-        )
+        bot.send_message(chat_id, "⛔ Bots are currently OFF by admin.")
         return
 
     try:
@@ -282,84 +277,93 @@ def process_download(bot, chat_id, uid, url):
 
         not_joined = check_force_join(bot, uid)
 
-        if not not_joined:
-
-            pass
-
-        else:
+        if not_joined:
 
             send_join(bot, chat_id, not_joined, url)
             return
 
 
-        bot.send_chat_action(chat_id, "upload_video")
+        # ===== TYPING =====
+
+        bot.send_chat_action(chat_id, "typing")
 
         msg = bot.send_message(chat_id, "⚡ Downloading...")
 
 
         # ===== GET MEDIA =====
-result = get_tiktok(url)
 
-if not result:
-    bot.send_message(chat_id, "❌ Download failed")
-    return
+        result = get_tiktok(url)
 
-bot_username = bot.get_me().username
+        if not result:
 
-
-# ===== VIDEO =====
-if result["type"] == "video":
-
-    video_url = result["media"]
-    path = download_file(video_url)
-
-    if not path:
-        bot.send_message(chat_id, "❌ Video failed")
-        return
-
-    bot.send_chat_action(chat_id, "upload_video")
-
-    with open(path, "rb") as v:
-
-        bot.send_video(
-            chat_id,
-            v,
-            caption=f"Via @{bot_username}",
-            supports_streaming=True
-        )
-
-    bot.send_message(chat_id, "Created: @Verify_yourbot")
-
-    try:
-        bot.delete_message(chat_id, msg.message_id)
-    except:
-        pass
-
-    try:
-        os.remove(path)
-    except:
-        pass
+            bot.send_message(chat_id, "❌ Download failed")
+            return
 
 
-# ===== PHOTO =====
-elif result["type"] == "photo":
+        bot_username = bot.get_me().username
 
-    for img in result["media"]:
 
-        path = download_file(img)
+        # ===== VIDEO =====
 
-        if not path:
-            continue
+        if result["type"] == "video":
 
-        bot.send_chat_action(chat_id, "upload_photo")
+            video_url = result["media"]
 
-        with open(path, "rb") as p:
-            bot.send_photo(chat_id, p)
+            path = download_file(video_url)
 
-        try:
-            os.remove(path)
-        except:
-            pass
+            if not path:
+
+                bot.send_message(chat_id, "❌ Video failed")
+                return
+
+
+            bot.send_chat_action(chat_id, "upload_video")
+
+            with open(path, "rb") as v:
+
+                bot.send_video(
+                    chat_id,
+                    v,
+                    caption=f"Via @{bot_username}",
+                    supports_streaming=True
+                )
+
+
+            bot.send_message(chat_id, "Created: @Verify_yourbot")
+
+
+            try:
+                bot.delete_message(chat_id, msg.message_id)
+            except:
+                pass
+
+
+            try:
+                os.remove(path)
+            except:
+                pass
+
+
+        # ===== PHOTO =====
+
+        elif result["type"] == "photo":
+
+            for img in result["media"]:
+
+                path = download_file(img)
+
+                if not path:
+                    continue
+
+                bot.send_chat_action(chat_id, "upload_photo")
+
+                with open(path, "rb") as p:
+                    bot.send_photo(chat_id, p)
+
+                try:
+                    os.remove(path)
+                except:
+                    pass
 
 
         # ===== SAVE DOWNLOAD =====
@@ -370,6 +374,7 @@ elif result["type"] == "photo":
                 "user": uid,
                 "time": time.time()
             })
+
         except:
             pass
 
@@ -379,17 +384,19 @@ elif result["type"] == "photo":
         print("Download error:", e)
 
 
+
 # ================= START USER BOT =================
 
 def start_user_bot(token):
 
     while True:
+
         try:
 
             bot = telebot.TeleBot(
                 token,
                 threaded=True,
-                num_threads=10
+                num_threads=20
             )
 
             running_bots[token] = bot
@@ -450,10 +457,7 @@ CREATED: @Verify_yourbot
 
                 if not not_joined:
 
-                    bot.answer_callback_query(
-                        call.id,
-                        "✅ Verified"
-                    )
+                    bot.answer_callback_query(call.id, "✅ Verified")
 
                     if chat_id in pending_links:
 
@@ -493,6 +497,7 @@ CREATED: @Verify_yourbot
             print("Bot crash:", token, e)
 
             time.sleep(5)
+
 
 
 # ================= RUNNER SYSTEM =================
