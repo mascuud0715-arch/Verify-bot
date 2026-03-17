@@ -826,12 +826,27 @@ def broadcast_menu(message):
     global broadcast_mode
 
     broadcast_mode = True
+
+    # RESET EVERYTHING
     broadcast_data["text"] = None
     broadcast_data["buttons"] = []
+    broadcast_data["style"] = ""
+    broadcast_data["photo"] = None
+    broadcast_data["video"] = None
 
     bot.send_message(
         message.chat.id,
-        "📢 Send broadcast text"
+        """
+📢 BROADCAST MODE
+
+Send one of the following:
+
+✏️ Text  
+🖼 Photo + caption  
+🎬 Video + caption  
+
+Then customize buttons/style.
+"""
     )
 
 
@@ -839,34 +854,31 @@ def broadcast_menu(message):
 # RECEIVE TEXT
 # ==============================
 
-@bot.message_handler(func=lambda m: broadcast_mode and broadcast_data["text"] is None)
+@bot.message_handler(func=lambda m: broadcast_mode and broadcast_data["text"] is None, content_types=["text", "photo", "video"])
 def get_text(message):
 
-    broadcast_data["text"] = message.text
+    # TEXT
+    if message.text:
+        broadcast_data["text"] = message.text
+
+    # PHOTO
+    elif message.photo:
+        broadcast_data["photo"] = message.photo[-1].file_id
+        broadcast_data["text"] = message.caption or ""
+
+    # VIDEO
+    elif message.video:
+        broadcast_data["video"] = message.video.file_id
+        broadcast_data["text"] = message.caption or ""
 
     kb = InlineKeyboardMarkup()
 
-    kb.add(
-        InlineKeyboardButton("➕ Add Inline", callback_data="add_inline")
-    )
+    kb.add(InlineKeyboardButton("➕ Add Inline", callback_data="add_inline"))
+    kb.add(InlineKeyboardButton("🎨 Color", callback_data="color"))
+    kb.add(InlineKeyboardButton("👀 Preview", callback_data="preview"))
+    kb.add(InlineKeyboardButton("📤 Send Broadcast", callback_data="send_bc"))
 
-    kb.add(
-        InlineKeyboardButton("🎨 Color", callback_data="color")
-    )
-
-    kb.add(
-        InlineKeyboardButton("👀 Preview", callback_data="preview")
-    )
-
-    kb.add(
-        InlineKeyboardButton("📤 Send Broadcast", callback_data="send_bc")
-    )
-
-    bot.send_message(
-        message.chat.id,
-        "Message saved. Choose option:",
-        reply_markup=kb
-    )
+    bot.send_message(message.chat.id, "Saved. Choose option:", reply_markup=kb)
 
 
 # ==============================
@@ -972,21 +984,34 @@ def preview(call):
     text = f"{broadcast_data['style']} {broadcast_data['text']}"
 
     kb = InlineKeyboardMarkup()
-
     for b in broadcast_data["buttons"]:
+        kb.add(InlineKeyboardButton(b[0], url=b[1]))
 
-        kb.add(
-            InlineKeyboardButton(
-                b[0],
-                url=b[1]
-            )
+    # VIDEO FIRST
+    if broadcast_data["video"]:
+        bot.send_video(
+            call.message.chat.id,
+            broadcast_data["video"],
+            caption=text,
+            reply_markup=kb
         )
 
-    bot.send_message(
-        call.message.chat.id,
-        text,
-        reply_markup=kb
-    )
+    # PHOTO
+    elif broadcast_data["photo"]:
+        bot.send_photo(
+            call.message.chat.id,
+            broadcast_data["photo"],
+            caption=text,
+            reply_markup=kb
+        )
+
+    # TEXT ONLY
+    else:
+        bot.send_message(
+            call.message.chat.id,
+            text,
+            reply_markup=kb
+        )
 
 
 # ==============================
@@ -1001,14 +1026,8 @@ def send_broadcast(call):
     text = f"{broadcast_data['style']} {broadcast_data['text']}"
 
     kb = InlineKeyboardMarkup()
-
     for b in broadcast_data["buttons"]:
-        kb.add(
-            InlineKeyboardButton(
-                b[0],
-                url=b[1]
-            )
-        )
+        kb.add(InlineKeyboardButton(b[0], url=b[1]))
 
     bots = list(bots_collection.find())
     users = list(users_collection.find())
@@ -1017,21 +1036,38 @@ def send_broadcast(call):
     delivered = 0
 
     for b in bots:
-
         try:
-
             send_bot = telebot.TeleBot(b["token"])
             bots_used += 1
 
             for u in users:
-
                 try:
 
-                    send_bot.send_message(
-                        u["user_id"],
-                        text,
-                        reply_markup=kb
-                    )
+                    # 🎬 VIDEO
+                    if broadcast_data["video"]:
+                        send_bot.send_video(
+                            u["user_id"],
+                            broadcast_data["video"],
+                            caption=text,
+                            reply_markup=kb
+                        )
+
+                    # 🖼 PHOTO
+                    elif broadcast_data["photo"]:
+                        send_bot.send_photo(
+                            u["user_id"],
+                            broadcast_data["photo"],
+                            caption=text,
+                            reply_markup=kb
+                        )
+
+                    # 💬 TEXT
+                    else:
+                        send_bot.send_message(
+                            u["user_id"],
+                            text,
+                            reply_markup=kb
+                        )
 
                     delivered += 1
 
@@ -1043,16 +1079,22 @@ def send_broadcast(call):
 
     broadcast_mode = False
 
+    # RESET DATA
+    broadcast_data["text"] = None
+    broadcast_data["buttons"] = []
+    broadcast_data["photo"] = None
+    broadcast_data["video"] = None
+
     bot.send_message(
         call.message.chat.id,
         f"""
 📢 BROADCAST SENT
 
 🤖 Bots Used: {bots_used}
-👥 Total Users: {len(users)}
+👥 Users: {len(users)}
 📬 Delivered: {delivered}
 """
-    )
+                        )
 
 
 # ==============================
