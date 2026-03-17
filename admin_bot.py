@@ -1040,9 +1040,7 @@ def send_broadcast(call):
             bots_used += 1
 
             # ✅ ONLY USERS OF THIS BOT
-            bot_users = users_collection.find({
-                "bots": b["username"]
-            })
+            bot_users = users_collection.find()
 
             for u in bot_users:
                 try:
