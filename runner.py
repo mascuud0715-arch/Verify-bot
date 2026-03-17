@@ -297,8 +297,9 @@ def process_download(bot, chat_id, uid, url):
         try:
             downloads_collection.insert_one({
     "user_id": uid,
+    "username": message.from_user.username,
     "bot_username": bot_username,
-    "type": result["type"],   # video ama photo
+    "type": result["type"],
     "time": time.time()
 })
         except:
