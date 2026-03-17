@@ -94,6 +94,14 @@ def admin_menu():
     KeyboardButton("🔄 Refresh Bots")
     )
 
+    kb.add(
+    KeyboardButton("🏆 Top Bots")
+    )
+
+    kb.add(
+    KeyboardButton("👥 Top Bot Users")
+    )
+
     return kb
 
 
@@ -147,8 +155,14 @@ def stats(message):
 @bot.message_handler(func=lambda m: m.text == "📊 Media Stats")
 def media_stats(message):
 
-    tiktok = downloads_collection.count_documents({"type":"tiktok_video"})
-    photo = downloads_collection.count_documents({"type":"photo"})
+    video = downloads_collection.count_documents({
+        "type": {"$in": ["tiktok_video", "video"]}
+    })
+
+    photo = downloads_collection.count_documents({
+        "type": {"$in": ["photo", "image", "tiktok_photo"]}
+    })
+
     total = downloads_collection.count_documents({})
 
     bot.send_message(
@@ -156,7 +170,7 @@ def media_stats(message):
         f"""
 📥 DOWNLOAD STATS
 
-🎬 TikTok Videos: {tiktok}
+🎬 Videos: {video}
 🖼 Photos: {photo}
 📦 Total Downloads: {total}
 """
@@ -207,7 +221,7 @@ def bots_panel(message):
 @bot.callback_query_handler(func=lambda call: call.data == "bot_usernames")
 def bot_usernames(call):
 
-    bots = bots_collection.find()
+    bots = bots_collection.find({"active": True})
 
     text = "🤖 Bots Usernames\n\n"
 
@@ -233,7 +247,7 @@ def bot_usernames(call):
 @bot.callback_query_handler(func=lambda call: call.data == "bot_api")
 def bot_api(call):
 
-    bots = bots_collection.find()
+    bots = bots_collection.find({"active": True})
 
     text = "🔑 Bots API\n\n"
 
@@ -361,6 +375,127 @@ def save_channel(message):
     )
 
 
+# ================= TOP =================
+@bot.message_handler(func=lambda m: m.text == "🏆 Top Bots")
+def top_bots(message):
+
+    try:
+
+        pipeline = [
+            {
+                "$group": {
+                    "_id": "$bot_username",
+                    "total": {"$sum": 1}
+                }
+            },
+            {
+                "$sort": {"total": -1}
+            },
+            {
+                "$limit": 10
+            }
+        ]
+
+        results = list(downloads_collection.aggregate(pipeline))
+
+        if not results:
+            bot.send_message(
+                message.chat.id,
+                "❌ No download data yet"
+            )
+            return
+
+        text = "🏆 TOP BOTS (Most Downloads)\n\n"
+
+        i = 1
+
+        for r in results:
+
+            username = r["_id"]
+            total = r["total"]
+
+            text += f"{i}. @{username} — {total} downloads\n"
+            i += 1
+
+        bot.send_message(
+            message.chat.id,
+            text
+        )
+
+    except Exception as e:
+
+        print("Top bots error:", e)
+
+        bot.send_message(
+            message.chat.id,
+            "❌ Error fetching top bots"
+            )
+        
+# ================= TOP USER =================
+@bot.message_handler(func=lambda m: m.text == "👥 Top Bot Users")
+def top_bot_users(message):
+
+    try:
+
+        pipeline = [
+            {
+                "$group": {
+                    "_id": {
+                        "bot": "$bot_username",
+                        "user": "$user_id"
+                    }
+                }
+            },
+            {
+                "$group": {
+                    "_id": "$_id.bot",
+                    "users": {"$sum": 1}
+                }
+            },
+            {
+                "$sort": {"users": -1}
+            },
+            {
+                "$limit": 10
+            }
+        ]
+
+        results = list(downloads_collection.aggregate(pipeline))
+
+        if not results:
+            bot.send_message(
+                message.chat.id,
+                "❌ No user data yet"
+            )
+            return
+
+        text = "👥 TOP BOTS (Most Users)\n\n"
+
+        i = 1
+
+        for r in results:
+
+            username = r["_id"]
+            total_users = r["users"]
+
+            text += f"{i}. @{username} — {total_users} users\n"
+            i += 1
+
+        bot.send_message(
+            message.chat.id,
+            text
+        )
+
+    except Exception as e:
+
+        print("Top bot users error:", e)
+
+        bot.send_message(
+            message.chat.id,
+            "❌ Error fetching data"
+        )
+
+
 # ==============================
 # CHANNEL LIST
 # ==============================
@@ -418,7 +553,7 @@ def close_channels(message):
 @bot.message_handler(func=lambda m: m.text == "🔄 Refresh Bots")
 def refresh_bots(message):
 
-    bots = list(bots_collection.find())
+    bots_collection.delete_many({"active": False})
 
     total = len(bots)
 
