@@ -289,6 +289,36 @@ def process_download(bot, chat_id, uid, url):
     except Exception as e:
         print("Download error:", e)
 
+# ================= PROMO BUTTON =================
+        try:
+            kb = InlineKeyboardMarkup()
+
+            kb.add(
+                InlineKeyboardButton(
+                    "🤖 CREATE",
+                    url="https://t.me/Verify_yourbot"
+                )
+            )
+
+            bot.send_message(
+                chat_id,
+"""🚀 Build Your Own Telegram Bot
+
+Want your own bot? 👇
+
+➡️ @Verify_yourbot
+
+Get:
+• Your own bot
+• Ready system
+• Easy setup
+
+Start now and launch your bot today 🔥""",
+                reply_markup=kb
+            )
+        except Exception as e:
+            print("Promo error:", e)
+
 
 # ================= START BOT =================
 def start_user_bot(token):
