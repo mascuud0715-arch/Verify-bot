@@ -289,36 +289,6 @@ def process_download(bot, chat_id, uid, url):
     except Exception as e:
         print("Download error:", e)
 
-# ================= PROMO BUTTON =================
-        try:
-            kb = InlineKeyboardMarkup()
-
-            kb.add(
-                InlineKeyboardButton(
-                    "🤖 CREATE",
-                    url="https://t.me/Verify_yourbot"
-                )
-            )
-
-            bot.send_message(
-                chat_id,
-"""🚀 Build Your Own Telegram Bot
-
-Want your own bot? 👇
-
-➡️ @Verify_yourbot
-
-Get:
-• Your own bot
-• Ready system
-• Easy setup
-
-Start now and launch your bot today 🔥""",
-                reply_markup=kb
-            )
-        except Exception as e:
-            print("Promo error:", e)
-
 
 # ================= START BOT =================
 def start_user_bot(token):
@@ -349,11 +319,15 @@ def start_user_bot(token):
 
         # ================= START =================
         @bot.message_handler(commands=["start"])
-        def start(message):
-            save_user(message.from_user.id)
+def start(message):
 
-            bot.send_message(
-                message.chat.id,
+    save_user(message.from_user.id)
+
+    kb = ReplyKeyboardMarkup(resize_keyboard=True)
+    kb.add(KeyboardButton("Create your bot"))
+
+    bot.send_message(
+        message.chat.id,
 """👋 Welcome to TikTok Downloader Bot
 
 📥 Send any TikTok link and I will download it instantly.
@@ -365,8 +339,28 @@ Features
 
 Send link now.
 
-CREATED: @Verify_yourbot"""
-            )
+CREATED: @Verify_yourbot""",
+        reply_markup=kb
+    )
+
+    @bot.message_handler(func=lambda m: m.text == "Create your bot")
+def create_bot(message):
+
+    bot.send_message(
+        message.chat.id,
+"""🚀 Build Your Own Telegram Bot
+
+Want your own bot? 👇
+
+➡️ @Verify_yourbot
+
+Get:
+• Your own bot
+• Ready system
+• Easy setup
+
+Start now and launch your bot today 🔥"""
+    )
 
         # ================= LINK =================
         @bot.message_handler(func=lambda m: m.text and ("tiktok.com" in m.text or "vt.tiktok.com" in m.text))
