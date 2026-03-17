@@ -103,6 +103,10 @@ def admin_menu():
     KeyboardButton("👑 Top Users")
     )
 
+    kb.add(
+    KeyboardButton("🔍 See Target Bot")
+    )
+
     return kb
 
 
@@ -431,6 +435,122 @@ def top_bots(message):
             message.chat.id,
             "❌ Error fetching top bots"
             )
+
+# ================= TARGET BOT =================
+
+@bot.message_handler(func=lambda m: m.text == "🔍 See Target Bot")
+def ask_target_bot(message):
+
+    msg = bot.send_message(
+        message.chat.id,
+        "🤖 Send bot username\n\nExample:\n@mybot"
+    )
+
+    bot.register_next_step_handler(msg, process_target_bot)
+
+def process_target_bot(message):
+
+    username = message.text.replace("@", "").strip()
+
+    try:
+
+        # CHECK BOT EXISTS
+        bot_data = bots_collection.find_one({"username": username})
+
+        if not bot_data:
+            bot.send_message(
+                message.chat.id,
+                "❌ Bot not found in system"
+            )
+            return
+
+        # TOTAL DOWNLOADS
+        total = downloads_collection.count_documents({
+            "bot_username": username
+        })
+
+        # VIDEOS
+        videos = downloads_collection.count_documents({
+            "bot_username": username,
+            "type": {"$in": ["video", "tiktok_video"]}
+        })
+
+        # PHOTOS
+        photos = downloads_collection.count_documents({
+            "bot_username": username,
+            "type": {"$in": ["photo", "image", "tiktok_photo"]}
+        })
+
+        # UNIQUE USERS
+        users_pipeline = [
+            {"$match": {"bot_username": username}},
+            {"$group": {"_id": "$user_id"}},
+            {"$count": "total_users"}
+        ]
+
+        result = list(downloads_collection.aggregate(users_pipeline))
+        total_users = result[0]["total_users"] if result else 0
+
+        # TOP USERS (USERNAME)
+        top_users_pipeline = [
+            {
+                "$match": {
+                    "bot_username": username,
+                    "username": {"$ne": None}
+                }
+            },
+            {
+                "$group": {
+                    "_id": "$username",
+                    "total": {"$sum": 1}
+                }
+            },
+            {
+                "$sort": {"total": -1}
+            },
+            {
+                "$limit": 5
+            }
+        ]
+
+        top_users = list(downloads_collection.aggregate(top_users_pipeline))
+
+        top_text = ""
+        i = 1
+
+        for u in top_users:
+            top_text += f"{i}. @{u['_id']} — {u['total']}\n"
+            i += 1
+
+        if not top_text:
+            top_text = "No data"
+
+        # RESPONSE
+        text = f"""
+🔍 BOT ANALYTICS
+
+🤖 Bot: @{username}
+
+👥 Users: {total_users}
+📥 Downloads: {total}
+
+🎬 Videos: {videos}
+🖼 Photos: {photos}
+
+👑 Top Users:
+{top_text}
+"""
+
+        bot.send_message(message.chat.id, text)
+
+    except Exception as e:
+
+        print("Target bot error:", e)
+
+        bot.send_message(
+            message.chat.id,
+            "❌ Error fetching bot data"
+        )
 
 # ================= TOB USERS =================
 @bot.message_handler(func=lambda m: m.text == "👑 Top Users")
