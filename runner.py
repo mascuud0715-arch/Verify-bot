@@ -63,11 +63,16 @@ def system_status():
     )
 
 # ================= SAVE USER =================
-def save_user(uid):
+def save_user(user):
     try:
         users_collection.update_one(
-            {"user_id": uid},
-            {"$set": {"user_id": uid}},
+            {"user_id": user.id},
+            {
+                "$set": {
+                    "user_id": user.id,
+                    "username": user.username
+                }
+            },
             upsert=True
         )
     except Exception as e:
@@ -293,24 +298,24 @@ def process_download(bot, chat_id, uid, url):
         except:
             pass
 
-        # SAVE
-try:
-    try:
-        user = bot.get_chat(uid)
-        username = user.username
-    except:
-        username = None
+        # SAVE ✅ (HALKAN KU JIR)
+        try:
+            try:
+                user = bot.get_chat(uid)
+                username = user.username
+            except:
+                username = None
 
-    downloads_collection.insert_one({
-        "user_id": uid,
-        "username": username,
-        "bot_username": bot_username,
-        "type": result["type"],
-        "time": time.time()
-    })
+            downloads_collection.insert_one({
+                "user_id": uid,
+                "username": username,
+                "bot_username": bot_username,
+                "type": result["type"],
+                "time": time.time()
+            })
 
-except Exception as e:
-    print("Save error:", e)
+        except Exception as e:
+            print("Save error:", e)
 
 # ================= START BOT =================
 def start_user_bot(token):
