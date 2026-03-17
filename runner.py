@@ -29,7 +29,7 @@ verified_users = {}
 pending_links = {}
 
 # ================= THREAD =================
-download_pool = ThreadPoolExecutor(max_workers=10)
+download_pool = ThreadPoolExecutor(max_workers=30)
 
 # ================= SESSION =================
 def get_session():
@@ -200,8 +200,7 @@ def download_file(url):
         print("Download error:", e)
         return None
 
-        # ================= PROCESS DOWNLOAD ================
-        # ================= PROCESS DOWNLOAD =================
+# ================= PROCESS DOWNLOAD =================
 def process_download(bot, chat_id, uid, url):
 
     bots_status, _, _ = system_status()
@@ -219,7 +218,9 @@ def process_download(bot, chat_id, uid, url):
         # FORCE JOIN
         not_joined = check_force_join(bot, uid)
 
-        if not_joined:
+        if not not_joined:
+            verified_users[uid] = True
+        else:
             send_join(bot, chat_id, not_joined, url)
             return
 
@@ -258,7 +259,6 @@ def process_download(bot, chat_id, uid, url):
             except:
                 pass
 
-            # BUTTON MESSAGE
             kb = InlineKeyboardMarkup()
             kb.add(
                 InlineKeyboardButton(
@@ -277,7 +277,6 @@ def process_download(bot, chat_id, uid, url):
         elif result["type"] == "photo":
 
             for img in result["media"]:
-
                 path = download_file(img)
 
                 if not path:
@@ -298,7 +297,7 @@ def process_download(bot, chat_id, uid, url):
         except:
             pass
 
-        # SAVE ✅ (HALKAN KU JIR)
+        # ================= SAVE =================
         try:
             try:
                 user = bot.get_chat(uid)
@@ -317,13 +316,17 @@ def process_download(bot, chat_id, uid, url):
         except Exception as e:
             print("Save error:", e)
 
+    except Exception as e:
+        print("Process error:", e)
+
+
 # ================= START BOT =================
 def start_user_bot(token):
 
     try:
         print("🚀 Starting bot:", token)
 
-        bot = telebot.TeleBot(token, threaded=True, num_threads=20)
+        bot = telebot.TeleBot(token, threaded=False)
 
         try:
             bot.delete_webhook()
@@ -338,9 +341,13 @@ def start_user_bot(token):
 
         running_bots[token] = bot
 
+        print("✅ Handlers loading...")
+
         # ================= START =================
         @bot.message_handler(commands=["start"])
         def start(message):
+            print("START RECEIVED:", message.from_user.id)
+
             save_user(message.from_user)
 
             kb = ReplyKeyboardMarkup(resize_keyboard=True)
@@ -379,21 +386,18 @@ CREATED: @Verify_yourbot""",
                 message.chat.id,
 """🚀 Build Your Own Telegram Bot
 
-Want your own bot? 👇
-
 ➡️ @Verify_yourbot
 
-Get:
 • Your own bot
 • Ready system
 • Easy setup
 
-Start now and launch your bot today 🔥""",
+Start now 🔥""",
                 reply_markup=kb
             )
 
         # ================= HANDLE LINK =================
-        @bot.message_handler(func=lambda m: m.text and ("tiktok.com" in m.text or "vt.tiktok.com" in m.text))
+        @bot.message_handler(func=lambda m: m.text and "tiktok.com" in m.text)
         def handle(message):
 
             download_pool.submit(
@@ -403,26 +407,6 @@ Start now and launch your bot today 🔥""",
                 message.from_user.id,
                 message.text.strip()
             )
-
-        # ================= DOWNLOAD AGAIN =================
-        @bot.callback_query_handler(func=lambda call: call.data.startswith("again"))
-        def again(call):
-
-            try:
-                _, url = call.data.split("|")
-
-                bot.answer_callback_query(call.id, "🔄 Downloading again...")
-
-                download_pool.submit(
-                    process_download,
-                    bot,
-                    call.message.chat.id,
-                    call.from_user.id,
-                    url
-                )
-
-            except:
-                bot.answer_callback_query(call.id, "❌ Error", show_alert=True)
 
         # ================= CONFIRM JOIN =================
         @bot.callback_query_handler(func=lambda call: call.data == "confirm_join")
@@ -438,7 +422,6 @@ Start now and launch your bot today 🔥""",
                 bot.answer_callback_query(call.id, "✅ Verified")
 
                 if chat_id in pending_links:
-
                     url = pending_links[chat_id]
                     del pending_links[chat_id]
 
@@ -465,7 +448,7 @@ Start now and launch your bot today 🔥""",
         print("❌ Bot crash:", token, e)
 
 
-# ================= RUNNER SYSTEM =================
+# ================= RUNNER =================
 print("🚀 Runner Started")
 
 while True:
@@ -475,7 +458,6 @@ while True:
         bots = list(bots_collection.find({"active": True}))
         active_tokens = []
 
-        # ===== SYSTEM OFF =====
         if not bots_status:
 
             for token in list(running_bots.keys()):
@@ -489,7 +471,6 @@ while True:
             time.sleep(5)
             continue
 
-        # ===== START NEW BOTS =====
         for b in bots:
 
             token = b.get("token")
@@ -509,7 +490,6 @@ while True:
 
                 time.sleep(1)
 
-        # ===== REMOVE OLD BOTS =====
         for token in list(running_bots.keys()):
 
             if token not in active_tokens:
