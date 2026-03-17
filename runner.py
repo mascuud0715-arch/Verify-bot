@@ -341,7 +341,7 @@ def start_user_bot(token):
         # ================= START =================
         @bot.message_handler(commands=["start"])
         def start(message):
-            save_user(message.from_user.id)
+            save_user(message.from_user)
 
             kb = ReplyKeyboardMarkup(resize_keyboard=True)
             kb.add(KeyboardButton("Create your bot"))
