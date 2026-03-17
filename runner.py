@@ -294,19 +294,23 @@ def process_download(bot, chat_id, uid, url):
             pass
 
         # SAVE
-        try:
-            downloads_collection.insert_one({
-    "user_id": uid,
-    "username": message.from_user.username,
-    "bot_username": bot_username,
-    "type": result["type"],
-    "time": time.time()
-})
-        except:
-            pass
+try:
+    try:
+        user = bot.get_chat(uid)
+        username = user.username
+    except:
+        username = None
 
-    except Exception as e:
-        print("Download error:", e)
+    downloads_collection.insert_one({
+        "user_id": uid,
+        "username": username,
+        "bot_username": bot_username,
+        "type": result["type"],
+        "time": time.time()
+    })
+
+except Exception as e:
+    print("Save error:", e)
 
 # ================= START BOT =================
 def start_user_bot(token):
