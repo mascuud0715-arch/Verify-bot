@@ -1026,11 +1026,10 @@ def send_broadcast(call):
     text = f"{broadcast_data['style']} {broadcast_data['text']}"
 
     kb = InlineKeyboardMarkup()
-    for b in broadcast_data["buttons"]:
-        kb.add(InlineKeyboardButton(b[0], url=b[1]))
+    for btt in broadcast_data["buttons"]:
+        kb.add(InlineKeyboardButton(btt[0], url=btt[1]))
 
     bots = list(bots_collection.find())
-    users = list(users_collection.find())
 
     bots_used = 0
     delivered = 0
@@ -1040,11 +1039,16 @@ def send_broadcast(call):
             send_bot = telebot.TeleBot(b["token"])
             bots_used += 1
 
-            for u in users:
+            # ✅ ONLY USERS OF THIS BOT
+            bot_users = users_collection.find({
+                "bots": b["username"]
+            })
+
+            for u in bot_users:
                 try:
 
                     # 🎬 VIDEO
-                    if broadcast_data["video"]:
+                    if broadcast_data.get("video"):
                         send_bot.send_video(
                             u["user_id"],
                             broadcast_data["video"],
@@ -1053,7 +1057,7 @@ def send_broadcast(call):
                         )
 
                     # 🖼 PHOTO
-                    elif broadcast_data["photo"]:
+                    elif broadcast_data.get("photo"):
                         send_bot.send_photo(
                             u["user_id"],
                             broadcast_data["photo"],
@@ -1071,11 +1075,11 @@ def send_broadcast(call):
 
                     delivered += 1
 
-                except:
-                    pass
+                except Exception as e:
+                    print("USER ERROR:", e)
 
-        except:
-            pass
+        except Exception as e:
+            print("BOT ERROR:", e)
 
     broadcast_mode = False
 
@@ -1091,10 +1095,9 @@ def send_broadcast(call):
 📢 BROADCAST SENT
 
 🤖 Bots Used: {bots_used}
-👥 Users: {len(users)}
 📬 Delivered: {delivered}
 """
-                        )
+    )
 
 
 # ==============================
