@@ -46,7 +46,9 @@ broadcast_mode = False
 broadcast_data = {
     "text": None,
     "buttons": [],
-    "style": ""
+    "style": "",
+    "photo": None,
+    "video": None
 }
 
 
@@ -863,13 +865,21 @@ def get_text(message):
 
     # PHOTO
     elif message.photo:
-        broadcast_data["photo"] = message.photo[-1].file_id
-        broadcast_data["text"] = message.caption or ""
+
+    file_info = bot.get_file(message.photo[-1].file_id)
+    file_url = f"https://api.telegram.org/file/bot{TOKEN}/{file_info.file_path}"
+
+    broadcast_data["photo"] = file_url
+    broadcast_data["text"] = message.caption or ""
 
     # VIDEO
     elif message.video:
-        broadcast_data["video"] = message.video.file_id
-        broadcast_data["text"] = message.caption or ""
+
+    file_info = bot.get_file(message.video.file_id)
+    file_url = f"https://api.telegram.org/file/bot{TOKEN}/{file_info.file_path}"
+
+    broadcast_data["video"] = file_url
+    broadcast_data["text"] = message.caption or ""
 
     kb = InlineKeyboardMarkup()
 
