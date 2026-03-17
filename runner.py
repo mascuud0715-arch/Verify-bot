@@ -195,6 +195,7 @@ def download_file(url):
         print("Download error:", e)
         return None
 
+        # ================= PROCESS DOWNLOAD ================
         # ================= PROCESS DOWNLOAD =================
 def process_download(bot, chat_id, uid, url):
 
@@ -213,99 +214,96 @@ def process_download(bot, chat_id, uid, url):
         # FORCE JOIN
         not_joined = check_force_join(bot, uid)
 
-        if not not_joined:
-            bot.send_chat_action(chat_id, "typing")
-            msg = bot.send_message(chat_id, "⚡ Downloading...")
+        if not_joined:
+            send_join(bot, chat_id, not_joined, url)
+            return
 
-            result = get_tiktok(url)
+        bot.send_chat_action(chat_id, "typing")
+        msg = bot.send_message(chat_id, "⚡ Downloading...")
 
-            if not result:
-                bot.send_message(chat_id, "❌ Download failed")
+        result = get_tiktok(url)
+
+        if not result:
+            bot.send_message(chat_id, "❌ Download failed")
+            return
+
+        bot_username = bot.get_me().username
+
+        # ================= VIDEO =================
+        if result["type"] == "video":
+
+            path = download_file(result["media"])
+
+            if not path:
+                bot.send_message(chat_id, "❌ Video failed")
                 return
 
-            bot_username = bot.get_me().username
+            bot.send_chat_action(chat_id, "upload_video")
 
-            # ================= VIDEO =================
-            # ================= VIDEO =================
-if result["type"] == "video":
-
-    path = download_file(result["media"])
-
-    if not path:
-        bot.send_message(chat_id, "❌ Video failed")
-        return
-
-    bot.send_chat_action(chat_id, "upload_video")
-
-    with open(path, "rb") as v:
-        bot.send_video(
-            chat_id,
-            v,
-            caption=f"Via: @{bot_username}",
-            supports_streaming=True
-        )
-
-    try:
-        os.remove(path)
-    except:
-        pass
-
-    # ✅ INLINE BUTTON
-    kb = InlineKeyboardMarkup()
-    kb.add(
-        InlineKeyboardButton(
-            "🤖 CREATE OWN BOT",
-            url="https://t.me/Verify_yourbot"
-        )
-    )
-
-    # ✅ MESSAGE GOONI AH
-    bot.send_message(
-        chat_id,
-        "✨ Created: @Verify_yourbot",
-        reply_markup=kb
-    )
-
-            # ================= PHOTO =================
-            elif result["type"] == "photo":
-
-                for img in result["media"]:
-
-                    path = download_file(img)
-
-                    if not path:
-                        continue
-
-                    bot.send_chat_action(chat_id, "upload_photo")
-
-                    with open(path, "rb") as p:
-                        bot.send_photo(chat_id, p)
-
-                    try:
-                        os.remove(path)
-                    except:
-                        pass
+            with open(path, "rb") as v:
+                bot.send_video(
+                    chat_id,
+                    v,
+                    caption=f"Via: @{bot_username}",
+                    supports_streaming=True
+                )
 
             try:
-                bot.delete_message(chat_id, msg.message_id)
+                os.remove(path)
             except:
                 pass
 
-            # SAVE DOWNLOAD
-            try:
-                downloads_collection.insert_one({
-                    "user": uid,
-                    "time": time.time()
-                })
-            except:
-                pass
+            # BUTTON MESSAGE
+            kb = InlineKeyboardMarkup()
+            kb.add(
+                InlineKeyboardButton(
+                    "🤖 CREATE OWN BOT",
+                    url="https://t.me/Verify_yourbot"
+                )
+            )
 
-        else:
-            send_join(bot, chat_id, not_joined, url)
+            bot.send_message(
+                chat_id,
+                "✨ Created: @Verify_yourbot",
+                reply_markup=kb
+            )
+
+        # ================= PHOTO =================
+        elif result["type"] == "photo":
+
+            for img in result["media"]:
+
+                path = download_file(img)
+
+                if not path:
+                    continue
+
+                bot.send_chat_action(chat_id, "upload_photo")
+
+                with open(path, "rb") as p:
+                    bot.send_photo(chat_id, p)
+
+                try:
+                    os.remove(path)
+                except:
+                    pass
+
+        try:
+            bot.delete_message(chat_id, msg.message_id)
+        except:
+            pass
+
+        # SAVE
+        try:
+            downloads_collection.insert_one({
+                "user": uid,
+                "time": time.time()
+            })
+        except:
+            pass
 
     except Exception as e:
         print("Download error:", e)
-
 
 # ================= START BOT =================
 def start_user_bot(token):
