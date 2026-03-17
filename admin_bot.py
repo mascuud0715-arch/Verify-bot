@@ -872,8 +872,7 @@ def get_text(message):
     broadcast_data["photo"] = file_url
     broadcast_data["text"] = message.caption or ""
 
-    # VIDEO
-    elif message.video:
+elif message.video:
 
     file_info = bot.get_file(message.video.file_id)
     file_url = f"https://api.telegram.org/file/bot{TOKEN}/{file_info.file_path}"
