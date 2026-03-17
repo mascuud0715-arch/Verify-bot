@@ -459,10 +459,7 @@ Start now and launch your bot today 🔥""",
 
         print("🟢 Bot Running:", token)
 
-        bot.infinity_polling(
-            skip_pending=True,
-            timeout=60,
-            long_polling_timeout=60
+        bot.infinity_polling(skip_pending=True, none_stop=True)
         )
 
     except Exception as e:
