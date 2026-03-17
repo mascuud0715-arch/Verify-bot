@@ -441,12 +441,12 @@ def top_users(message):
         pipeline = [
             {
                 "$match": {
-                    "user_id": {"$ne": None}
+                    "username": {"$ne": None}
                 }
             },
             {
                 "$group": {
-                    "_id": "$user_id",
+                    "_id": "$username",
                     "total": {"$sum": 1}
                 }
             },
@@ -469,10 +469,11 @@ def top_users(message):
         i = 1
 
         for r in results:
-            user_id = r["_id"]
+
+            username = r["_id"]
             total = r["total"]
 
-            text += f"{i}. ID: {user_id} — {total} downloads\n"
+            text += f"{i}. @{username} — {total} downloads\n"
             i += 1
 
         bot.send_message(message.chat.id, text)
@@ -605,7 +606,7 @@ def refresh_bots(message):
 
     bots_collection.delete_many({"active": False})
 
-    total = len(bots)
+    total = bots_collection.count_documents({"active": True})
 
     bot.send_message(
         message.chat.id,
