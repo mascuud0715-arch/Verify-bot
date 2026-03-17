@@ -7,6 +7,7 @@ import tempfile
 from concurrent.futures import ThreadPoolExecutor
 from pymongo import MongoClient
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
+from telebot.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
 
 # ================= ENV =================
 MONGO_URL = os.getenv("MONGO_URL")
@@ -320,7 +321,6 @@ def start_user_bot(token):
         # ================= START =================
         @bot.message_handler(commands=["start"])
 def start(message):
-
     save_user(message.from_user.id)
 
     kb = ReplyKeyboardMarkup(resize_keyboard=True)
@@ -343,8 +343,18 @@ CREATED: @Verify_yourbot""",
         reply_markup=kb
     )
 
-    @bot.message_handler(func=lambda m: m.text == "Create your bot")
+
+# ================= CREATE BOT BUTTON =================
+@bot.message_handler(func=lambda m: m.text == "Create your bot")
 def create_bot(message):
+
+    kb = InlineKeyboardMarkup()
+    kb.add(
+        InlineKeyboardButton(
+            "🤖 CREATE",
+            url="https://t.me/Verify_yourbot"
+        )
+    )
 
     bot.send_message(
         message.chat.id,
@@ -359,7 +369,8 @@ Get:
 • Ready system
 • Easy setup
 
-Start now and launch your bot today 🔥"""
+Start now and launch your bot today 🔥""",
+        reply_markup=kb
     )
 
         # ================= LINK =================
