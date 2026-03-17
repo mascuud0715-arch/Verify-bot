@@ -296,9 +296,11 @@ def process_download(bot, chat_id, uid, url):
         # SAVE
         try:
             downloads_collection.insert_one({
-                "user": uid,
-                "time": time.time()
-            })
+    "user_id": uid,
+    "bot_username": bot_username,
+    "type": result["type"],   # video ama photo
+    "time": time.time()
+})
         except:
             pass
 
