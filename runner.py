@@ -35,7 +35,7 @@ pending_links = {}
 
 # ================= THREAD POOL =================
 
-download_pool = ThreadPoolExecutor(max_workers=100)
+download_pool = ThreadPoolExecutor(max_workers=15)
 
 # ================= HTTP SESSION =================
 
