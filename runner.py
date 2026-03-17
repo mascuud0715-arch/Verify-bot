@@ -226,46 +226,45 @@ def process_download(bot, chat_id, uid, url):
             bot_username = bot.get_me().username
 
             # ================= VIDEO =================
-            if result["type"] == "video":
+            # ================= VIDEO =================
+if result["type"] == "video":
 
-                path = download_file(result["media"])
+    path = download_file(result["media"])
 
-                if not path:
-                    bot.send_message(chat_id, "❌ Video failed")
-                    return
+    if not path:
+        bot.send_message(chat_id, "❌ Video failed")
+        return
 
-                bot.send_chat_action(chat_id, "upload_video")
+    bot.send_chat_action(chat_id, "upload_video")
 
-                # 🔥 INLINE BUTTONS
-                kb = InlineKeyboardMarkup()
-                kb.add(
-                    InlineKeyboardButton("🔁 Download Again", callback_data=f"again|{url}")
-                )
-                kb.add(
-                    InlineKeyboardButton("🤖 Create Your Bot", url="https://t.me/Verify_yourbot")
-                )
+    with open(path, "rb") as v:
+        bot.send_video(
+            chat_id,
+            v,
+            caption=f"Via: @{bot_username}",
+            supports_streaming=True
+        )
 
-                with open(path, "rb") as v:
-                    bot.send_video(
-                        chat_id,
-                        v,
-                        caption=f"""🎬 Downloaded Successfully
+    try:
+        os.remove(path)
+    except:
+        pass
 
-👤 Bot: @{bot_username}
+    # ✅ INLINE BUTTON
+    kb = InlineKeyboardMarkup()
+    kb.add(
+        InlineKeyboardButton(
+            "🤖 CREATE OWN BOT",
+            url="https://t.me/Verify_yourbot"
+        )
+    )
 
-🚀 Want your own bot?
-👉 @Verify_yourbot""",
-                        supports_streaming=True,
-                        reply_markup=kb
-                    )
-
-                try:
-                    os.remove(path)
-                except:
-                    pass
-
-                # ✅ CREATED MESSAGE
-                bot.send_message(chat_id, "✨ CREATED BY @Verify_yourbot")
+    # ✅ MESSAGE GOONI AH
+    bot.send_message(
+        chat_id,
+        "✨ Created: @Verify_yourbot",
+        reply_markup=kb
+    )
 
             # ================= PHOTO =================
             elif result["type"] == "photo":
