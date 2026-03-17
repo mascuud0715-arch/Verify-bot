@@ -63,18 +63,14 @@ def system_status():
     )
 
 # ================= SAVE USER =================
-def save_user(user, bot_username):
+def save_user(user):
     try:
         users_collection.update_one(
-            {
-                "user_id": user.id,
-                "bot_username": bot_username
-            },
+            {"user_id": user.id},
             {
                 "$set": {
                     "user_id": user.id,
-                    "username": user.username,
-                    "bot_username": bot_username
+                    "username": user.username
                 }
             },
             upsert=True
