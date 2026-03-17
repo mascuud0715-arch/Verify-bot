@@ -294,6 +294,10 @@ def process_download(bot, chat_id, uid, url):
 # ================= START BOT =================
 def start_user_bot(token):
 
+    bot = telebot.TeleBot(token)
+
+    # 🔥 HALKAN KU DHIG CODE-KA AAN KUSIIYAY
+
     try:
         print("🚀 Starting bot:", token)
 
