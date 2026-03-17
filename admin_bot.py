@@ -99,7 +99,8 @@ def admin_menu():
     )
 
     kb.add(
-    KeyboardButton("👥 Top Bot Users")
+    KeyboardButton("👥 Top Bot Users"),
+    keyboardButton("👑 Top Users")    
     )
 
     return kb
@@ -430,6 +431,55 @@ def top_bots(message):
             message.chat.id,
             "❌ Error fetching top bots"
             )
+
+# ================= TOB USERS =================
+@bot.message_handler(func=lambda m: m.text == "👑 Top Users")
+def top_users(message):
+
+    try:
+
+        pipeline = [
+            {
+                "$match": {
+                    "user_id": {"$ne": None}
+                }
+            },
+            {
+                "$group": {
+                    "_id": "$user_id",
+                    "total": {"$sum": 1}
+                }
+            },
+            {
+                "$sort": {"total": -1}
+            },
+            {
+                "$limit": 10
+            }
+        ]
+
+        results = list(downloads_collection.aggregate(pipeline))
+
+        if not results:
+            bot.send_message(message.chat.id, "❌ No data yet")
+            return
+
+        text = "👑 TOP USERS (GLOBAL DOWNLOADS)\n\n"
+
+        i = 1
+
+        for r in results:
+            user_id = r["_id"]
+            total = r["total"]
+
+            text += f"{i}. ID: {user_id} — {total} downloads\n"
+            i += 1
+
+        bot.send_message(message.chat.id, text)
+
+    except Exception as e:
+        print("Top users error:", e)
+        bot.send_message(message.chat.id, "❌ Error")
         
 # ================= TOP USER =================
 @bot.message_handler(func=lambda m: m.text == "👥 Top Bot Users")
