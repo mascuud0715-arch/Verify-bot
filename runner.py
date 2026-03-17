@@ -319,7 +319,8 @@ def start_user_bot(token):
         running_bots[token] = bot
 
         # ================= START =================
-        @bot.message_handler(commands=["start"])
+        # ================= START =================
+@bot.message_handler(commands=["start"])
 def start(message):
     save_user(message.from_user.id)
 
