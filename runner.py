@@ -460,7 +460,6 @@ Start now and launch your bot today 🔥""",
         print("🟢 Bot Running:", token)
 
         bot.infinity_polling(skip_pending=True, none_stop=True)
-        )
 
     except Exception as e:
         print("❌ Bot crash:", token, e)
