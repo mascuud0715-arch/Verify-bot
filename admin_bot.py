@@ -100,7 +100,7 @@ def admin_menu():
 
     kb.add(
     KeyboardButton("👥 Top Bot Users"),
-    keyboardButton("👑 Top Users")    
+    KeyboardButton("👑 Top Users")
     )
 
     return kb
