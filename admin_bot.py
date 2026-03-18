@@ -773,20 +773,33 @@ def system_check(message):
 # ==============================
 # FINAL RUN (ALL SYSTEMS)
 # ==============================
-def start_all_systems():
+import threading
 
-    import threading
+def run_admin():
+    while True:
+        try:
+            print("🚀 Admin Bot Running...")
+            bot.infinity_polling(skip_pending=True)
+        except Exception as e:
+            print("Admin error:", e)
 
-    threading.Thread(target=run_admin).start()
-    threading.Thread(target=run_receiver).start()
-    threading.Thread(target=auto_start_bots).start()
+def run_receiver():
+    while True:
+        try:
+            print("📥 Receiver Bot Running...")
+            receiver_bot.infinity_polling(skip_pending=True)
+        except Exception as e:
+            print("Receiver error:", e)
 
+time.sleep(0.05)
 
-# ==============================
-# MAIN START
-# ==============================
+# THREADS
 if __name__ == "__main__":
+    t1 = threading.Thread(target=run_admin)
+    t2 = threading.Thread(target=run_receiver)
 
-    print("🚀 FULL SYSTEM STARTED")
+    t1.start()
+    t2.start()
 
-    start_all_systems()
+    t1.join()
+    t2.join()
