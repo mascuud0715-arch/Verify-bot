@@ -1,5 +1,6 @@
 import telebot
 import os
+import time
 from telebot.types import (
     ReplyKeyboardMarkup,
     KeyboardButton,
@@ -216,20 +217,27 @@ def broadcast_menu(message):
 # ==============================
 # RECEIVE CONTENT
 # ==============================
-@bot.message_handler(func=lambda m: broadcast_mode and broadcast_data["text"] is None,
-                     content_types=["text", "photo", "video"])
+@bot.message_handler(content_types=["text", "photo", "video"])
 def get_content(message):
 
-    if message.text:
+    global broadcast_mode
+
+    if not broadcast_mode:
+        return
+
+    # TEXT
+    if message.content_type == "text":
         broadcast_data["text"] = message.text
 
-    elif message.photo:
+    # PHOTO
+    elif message.content_type == "photo":
         broadcast_data["photo"] = message.photo[-1].file_id
-        broadcast_data["text"] = message.caption or ""
+        broadcast_data["text"] = message.caption if message.caption else ""
 
-    elif message.video:
+    # VIDEO
+    elif message.content_type == "video":
         broadcast_data["video"] = message.video.file_id
-        broadcast_data["text"] = message.caption or ""
+        broadcast_data["text"] = message.caption if message.caption else ""
 
     kb = InlineKeyboardMarkup()
     kb.add(InlineKeyboardButton("➕ Button", callback_data="add_btn"))
@@ -351,33 +359,34 @@ def refresh_bots(message):
 # ==============================
 def send_to_user(send_bot, user_id, text, kb):
     try:
-        # VIDEO
+
         if broadcast_data["video"]:
             send_bot.send_video(
-                user_id,
-                broadcast_data["video"],
-                caption=text,
+                chat_id=user_id,
+                video=broadcast_data["video"],
+                caption=text or "",
                 reply_markup=kb
             )
 
-        # PHOTO
         elif broadcast_data["photo"]:
             send_bot.send_photo(
-                user_id,
-                broadcast_data["photo"],
-                caption=text,
+                chat_id=user_id,
+                photo=broadcast_data["photo"],
+                caption=text or "",
                 reply_markup=kb
             )
 
-        # TEXT
         else:
             send_bot.send_message(
-                user_id,
-                text,
+                chat_id=user_id,
+                text=text or "",
                 reply_markup=kb
             )
+
         return 1
-    except:
+
+    except Exception as e:
+        print(f"Send error to {user_id}: {e}")
         return 0
 
 # ==============================
@@ -914,6 +923,8 @@ def run_receiver():
             receiver_bot.infinity_polling(skip_pending=True)
         except Exception as e:
             print("Receiver error:", e)
+
+time.sleep(0.05)
 
 # THREADS
 if __name__ == "__main__":
