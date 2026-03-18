@@ -462,6 +462,67 @@ def send_broadcast(call):
     )
 
 # ==============================
+# BOT CONTROL ACTIONS
+# ==============================
+@bot.callback_query_handler(func=lambda c: c.data.startswith("see_user"))
+def see_username(call):
+    username = call.data.split(":")[1]
+
+    bot.answer_callback_query(call.id)
+    bot.send_message(call.message.chat.id, f"👤 Username: @{username}")
+
+
+@bot.callback_query_handler(func=lambda c: c.data.startswith("see_token"))
+def see_token(call):
+    username = call.data.split(":")[1]
+
+    bot_data = bots_collection.find_one({"username": username})
+
+    bot.answer_callback_query(call.id)
+
+    if bot_data:
+        bot.send_message(call.message.chat.id, f"🔑 Token:\n<code>{bot_data['token']}</code>")
+    else:
+        bot.send_message(call.message.chat.id, "❌ Bot not found")
+
+
+@bot.callback_query_handler(func=lambda c: c.data.startswith("ban_bot"))
+def ban_bot(call):
+    username = call.data.split(":")[1]
+
+    bots_collection.update_one(
+        {"username": username},
+        {"$set": {"banned": True}}
+    )
+
+    bot.answer_callback_query(call.id)
+    bot.send_message(call.message.chat.id, f"🚫 @{username} banned")
+
+
+@bot.callback_query_handler(func=lambda c: c.data.startswith("unban_bot"))
+def unban_bot(call):
+    username = call.data.split(":")[1]
+
+    bots_collection.update_one(
+        {"username": username},
+        {"$set": {"banned": False}}
+    )
+
+    bot.answer_callback_query(call.id)
+    bot.send_message(call.message.chat.id, f"✅ @{username} unbanned")
+
+
+@bot.callback_query_handler(func=lambda c: c.data == "back_main")
+def back_main(call):
+    bot.answer_callback_query(call.id)
+
+    bot.send_message(
+        call.message.chat.id,
+        "⚙️ MAIN MENU",
+        reply_markup=admin_menu()
+    )
+
+# ==============================
 # ANTI CRASH LOOP
 # ==============================
 def run_bot():
@@ -708,12 +769,36 @@ def show_bots(message):
         bot.send_message(message.chat.id, "❌ No bots")
         return
 
-    text = "🤖 BOTS LIST\n\n"
+    for b in bots[:20]:
+        username = b["username"]
 
-    for b in bots[:50]:
-        text += f"@{b['username']}\n"
+        bot.send_message(
+            message.chat.id,
+            f"🤖 @{username}",
+            reply_markup=bot_control_buttons(username)
+        )
 
-    bot.send_message(message.chat.id, text)
+# ==============================
+# BOT CONTROL PANEL BUTTONS
+# ==============================
+def bot_control_buttons(username):
+    kb = InlineKeyboardMarkup()
+
+    kb.add(
+        InlineKeyboardButton("👤 See Username", callback_data=f"see_user:{username}"),
+        InlineKeyboardButton("🔑 See Token", callback_data=f"see_token:{username}")
+    )
+
+    kb.add(
+        InlineKeyboardButton("🚫 Ban Bot", callback_data=f"ban_bot:{username}"),
+        InlineKeyboardButton("✅ Unban Bot", callback_data=f"unban_bot:{username}")
+    )
+
+    kb.add(
+        InlineKeyboardButton("🔙 BACK MAIN MENU", callback_data="back_main")
+    )
+
+    return kb
 
 
 # ==============================
