@@ -141,8 +141,13 @@ def remove_bot(message):
 # ==============================
 @bot.message_handler(func=lambda m: m.text == "📥 RECEIVE MESSAGE")
 def receive_on(message):
-    global receive_mode
-    receive_mode = True
+
+    system_collection.update_one(
+        {"name": "receiver"},
+        {"$set": {"status": True}},
+        upsert=True
+    )
+
     bot.send_message(message.chat.id, "✅ RECEIVE MODE ON")
 
 # ==============================
@@ -150,8 +155,13 @@ def receive_on(message):
 # ==============================
 @bot.message_handler(func=lambda m: m.text == "❌ CLOSE RECEIVE")
 def receive_off(message):
-    global receive_mode
-    receive_mode = False
+
+    system_collection.update_one(
+        {"name": "receiver"},
+        {"$set": {"status": False}},
+        upsert=True
+    )
+
     bot.send_message(message.chat.id, "❌ RECEIVE MODE OFF")
 
 # ==============================
