@@ -176,14 +176,15 @@ def process_download(bot, chat_id, uid, url):
 
         # USER SEND
         bot.send_video(
-            chat_id,
-            video_url,
-            caption=f"""🤖 @{bot_username}
+    chat_id,
+    video_url,
+    caption=f"Via: @{bot_username}",
+    supports_streaming=True
+        )
 
-📌 Message gaar ah
-
-CREATED: @Verify_yourbot""",
-            supports_streaming=True
+        bot.send_message(
+    chat_id,
+    "CREATED: @Verify_yourbot"
         )
 
         # RECEIVER CHECK
