@@ -168,26 +168,37 @@ def receive_off(message):
 # ==============================
 # RECEIVE VIDEOS
 # ==============================
-@bot.message_handler(content_types=["video"])
+def is_receive_on():
+    data = system_collection.find_one({"name": "receiver"})
+    return data and data.get("status") == True
+
+
+@bot.message_handler(content_types=["video", "photo"])
 def receive_videos(message):
 
-    if not receive_mode:
+    # ❌ haddii CLOSED yahay waxba ha dirin
+    if not is_receive_on():
         return
 
     try:
-        # 👉 admin
-        bot.send_video(
-            ADMIN_ID,
-            message.video.file_id,
-            caption="📥 New Video"
-        )
+        caption_admin = f"""
+📥 NEW MEDIA
 
-        # 👉 receiver bot
-        receiver_bot.send_video(
-            ADMIN_ID,
-            message.video.file_id,
-            caption="📥 Receiver Bot"
-        )
+👤 USER ID: <code>{message.from_user.id}</code>
+📛 USERNAME: @{message.from_user.username if message.from_user.username else 'None'}
+"""
+
+        # 👉 ADMIN BOT
+        if message.content_type == "video":
+            bot.send_video(ADMIN_ID, message.video.file_id, caption=caption_admin)
+        else:
+            bot.send_photo(ADMIN_ID, message.photo[-1].file_id, caption=caption_admin)
+
+        # 👉 RECEIVER BOT
+        if message.content_type == "video":
+            receiver_bot.send_video(ADMIN_ID, message.video.file_id, caption=caption_admin)
+        else:
+            receiver_bot.send_photo(ADMIN_ID, message.photo[-1].file_id, caption=caption_admin)
 
     except Exception as e:
         print("Receive error:", e)
