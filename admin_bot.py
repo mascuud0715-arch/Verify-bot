@@ -726,7 +726,44 @@ def run_bot():
 
 
 # ==============================
-# START APP
+# RECEIVER BOT START
 # ==============================
+@receiver_bot.message_handler(commands=["start"])
+def receiver_start(message):
+    receiver_bot.send_message(
+        message.chat.id,
+        "📥 Message Receiver Bot Active"
+    )
+
+
+# ==============================
+# RUN BOTH BOTS
+# ==============================
+import threading
+
+def run_admin():
+    while True:
+        try:
+            print("🚀 Admin Bot Running...")
+            bot.infinity_polling(skip_pending=True)
+        except Exception as e:
+            print("Admin error:", e)
+
+def run_receiver():
+    while True:
+        try:
+            print("📥 Receiver Bot Running...")
+            receiver_bot.infinity_polling(skip_pending=True)
+        except Exception as e:
+            print("Receiver error:", e)
+
+# THREADS
 if __name__ == "__main__":
-    run_bot()
+    t1 = threading.Thread(target=run_admin)
+    t2 = threading.Thread(target=run_receiver)
+
+    t1.start()
+    t2.start()
+
+    t1.join()
+    t2.join()
