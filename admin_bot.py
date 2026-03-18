@@ -837,7 +837,8 @@ def see_token_btn(message):
     if bot_data:
         bot.send_message(message.chat.id, f"<code>{bot_data['token']}</code>")
 
-        @bot.message_handler(func=lambda m: m.text == "🚫 Ban Bot")
+
+@bot.message_handler(func=lambda m: m.text == "🚫 Ban Bot")
 def ban_bot_btn(message):
 
     username = get_selected_bot()
@@ -848,6 +849,7 @@ def ban_bot_btn(message):
     )
 
     bot.send_message(message.chat.id, f"🚫 @{username} banned")
+
 
 @bot.message_handler(func=lambda m: m.text == "✅ Unban Bot")
 def unban_bot_btn(message):
