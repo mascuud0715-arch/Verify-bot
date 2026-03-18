@@ -769,14 +769,97 @@ def show_bots(message):
         bot.send_message(message.chat.id, "❌ No bots")
         return
 
-    for b in bots[:20]:
-        username = b["username"]
+    kb = ReplyKeyboardMarkup(resize_keyboard=True)
 
-        bot.send_message(
-            message.chat.id,
-            f"🤖 @{username}",
-            reply_markup=bot_control_buttons(username)
-        )
+    for b in bots[:20]:
+        kb.add(KeyboardButton(f"🤖 {b['username']}"))
+
+    kb.add(KeyboardButton("🔙 BACK MAIN MENU"))
+
+    bot.send_message(
+        message.chat.id,
+        "🤖 Select Bot:",
+        reply_markup=kb
+    )
+
+@bot.message_handler(func=lambda m: m.text.startswith("🤖 "))
+def bot_selected(message):
+
+    username = message.text.replace("🤖 ", "").strip()
+
+    # SAVE bot
+    system_collection.update_one(
+        {"_id": "selected_bot"},
+        {"$set": {"username": username}},
+        upsert=True
+    )
+
+    kb = ReplyKeyboardMarkup(resize_keyboard=True)
+
+    kb.add(KeyboardButton("👤 See Username"), KeyboardButton("🔑 See Token"))
+    kb.add(KeyboardButton("🚫 Ban Bot"), KeyboardButton("✅ Unban Bot"))
+    kb.add(KeyboardButton("🔙 BACK BOTS"))
+
+    bot.send_message(
+        message.chat.id,
+        f"⚙️ Bot Panel: @{username}",
+        reply_markup=kb
+    )
+
+def get_selected_bot():
+    data = system_collection.find_one({"_id": "selected_bot"})
+    return data["username"] if data else None
+
+@bot.message_handler(func=lambda m: m.text == "🔙 BACK MAIN MENU")
+def back_main_menu(message):
+
+    bot.send_message(
+        message.chat.id,
+        "⚙️ MAIN MENU",
+        reply_markup=admin_menu()
+    )
+
+@bot.message_handler(func=lambda m: m.text == "👤 See Username")
+def see_username_btn(message):
+
+    username = get_selected_bot()
+
+    if username:
+        bot.send_message(message.chat.id, f"👤 Username: @{username}")
+
+@bot.message_handler(func=lambda m: m.text == "🔑 See Token")
+def see_token_btn(message):
+
+    username = get_selected_bot()
+
+    bot_data = bots_collection.find_one({"username": username})
+
+    if bot_data:
+        bot.send_message(message.chat.id, f"<code>{bot_data['token']}</code>")
+
+        @bot.message_handler(func=lambda m: m.text == "🚫 Ban Bot")
+def ban_bot_btn(message):
+
+    username = get_selected_bot()
+
+    bots_collection.update_one(
+        {"username": username},
+        {"$set": {"banned": True}}
+    )
+
+    bot.send_message(message.chat.id, f"🚫 @{username} banned")
+
+@bot.message_handler(func=lambda m: m.text == "✅ Unban Bot")
+def unban_bot_btn(message):
+
+    username = get_selected_bot()
+
+    bots_collection.update_one(
+        {"username": username},
+        {"$set": {"banned": False}}
+    )
+
+    bot.send_message(message.chat.id, f"✅ @{username} unbanned")
 
 # ==============================
 # BOT CONTROL PANEL BUTTONS
