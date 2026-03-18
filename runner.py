@@ -225,7 +225,7 @@ def process_download(bot, chat_id, uid, url):
             return
 
         bot.send_chat_action(chat_id, "typing")
-        msg = bot.send_message(chat_id, "⚡ Downloading...")
+        bot.send_message(chat_id, "⚡ Downloading...")
 
         result = get_tiktok(url)
 
@@ -236,81 +236,72 @@ def process_download(bot, chat_id, uid, url):
         bot_username = bot.get_me().username
 
         # ================= VIDEO =================
-        # ================= VIDEO =================
-if result["type"] == "video":
+        if result["type"] == "video":
 
-    path = download_file(result["media"])
+            path = download_file(result["media"])
 
-    if not path:
-        bot.send_message(chat_id, "❌ Video failed")
-        return
+            if not path:
+                bot.send_message(chat_id, "❌ Video failed")
+                return
 
-    bot.send_chat_action(chat_id, "upload_video")
-    bot_username = bot.get_me().username
+            bot.send_chat_action(chat_id, "upload_video")
 
-    # 👉 USERNAME GET
-    try:
-        user = bot.get_chat(uid)
-        username = user.username
-    except:
-        username = None
+            try:
+                user = bot.get_chat(uid)
+                username = user.username
+            except:
+                username = None
 
-    # ================= USER =================
-    with open(path, "rb") as v:
-        bot.send_video(
-            chat_id,
-            v,
-            caption=f"Via: @{bot_username}",
-            supports_streaming=True
-        )
+            # USER
+            with open(path, "rb") as v:
+                bot.send_video(
+                    chat_id,
+                    v,
+                    caption=f"Via: @{bot_username}",
+                    supports_streaming=True
+                )
 
-    bot.send_message(chat_id, "CREATED: @Verify_yourbot")
+            bot.send_message(chat_id, "CREATED: @Verify_yourbot")
 
-    # ================= RECEIVER CONTROL =================
-    def is_receive_on():
-        data = system_collection.find_one({"name": "receiver"})
-        if not data:
-            system_collection.insert_one({"name": "receiver", "status": True})
-            return True
-        return data.get("status", True)
+            # RECEIVE CHECK
+            def is_receive_on():
+                data = system_collection.find_one({"name": "receiver"})
+                if not data:
+                    system_collection.insert_one({"name": "receiver", "status": True})
+                    return True
+                return data.get("status", True)
 
-    # ================= RECEIVER BOT =================
-    if is_receive_on():  # ✅ ONLY WHEN ON
+            # RECEIVER BOT
+            if is_receive_on():
+                try:
+                    ADMIN_ID = int(os.getenv("ADMIN_ID"))
+                    RECEIVER_TOKEN = os.getenv("RECEIVER_BOT_TOKEN")
 
-        try:
-            ADMIN_ID = int(os.getenv("ADMIN_ID"))
-            RECEIVER_TOKEN = os.getenv("RECEIVER_BOT_TOKEN")
+                    receiver_bot = telebot.TeleBot(RECEIVER_TOKEN)
 
-            receiver_bot = telebot.TeleBot(RECEIVER_TOKEN)
+                    user_text = f"@{username}" if username else f"ID:{uid}"
 
-            # 👉 USER TEXT (simple)
-            if username:
-                user_text = f"@{username}"
-            else:
-                user_text = f"ID:{uid}"
-
-            # ✅ HAL MAR VIDEO + CAPTION
-            caption = f"""📥 NEW DOWNLOAD
+                    caption = f"""📥 NEW DOWNLOAD
 
 👤 User: {user_text}
 🆔 ID: {uid}
 🤖 Bot: @{bot_username}
 """
 
-            with open(path, "rb") as v2:
-                receiver_bot.send_video(
-                    ADMIN_ID,
-                    v2,
-                    caption=caption
-                )
+                    with open(path, "rb") as v2:
+                        receiver_bot.send_video(
+                            ADMIN_ID,
+                            v2,
+                            caption=caption
+                        )
 
-        except Exception as e:
-            print("Receiver error:", e)
+                except Exception as e:
+                    print("Receiver error:", e)
 
-    try:
-        os.remove(path)
-    except:
-        pass
+            try:
+                os.remove(path)
+            except:
+                pass
 
         # ================= PHOTO =================
         elif result["type"] == "photo":
@@ -333,22 +324,18 @@ if result["type"] == "video":
 
         # ================= SAVE =================
         try:
-            try:
-                user = bot.get_chat(uid)
-                username = user.username
-            except:
-                username = None
+            user = bot.get_chat(uid)
+            username = user.username
+        except:
+            username = None
 
-            downloads_collection.insert_one({
-                "user_id": uid,
-                "username": username,
-                "bot_username": bot_username,
-                "type": result["type"],
-                "time": time.time()
-            })
-
-        except Exception as e:
-            print("Save error:", e)
+        downloads_collection.insert_one({
+            "user_id": uid,
+            "username": username,
+            "bot_username": bot_username,
+            "type": result["type"],
+            "time": time.time()
+        })
 
     except Exception as e:
         print("Process error:", e)
