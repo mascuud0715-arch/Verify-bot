@@ -237,79 +237,76 @@ def process_download(bot, chat_id, uid, url):
 
         # ================= VIDEO =================
         # ================= VIDEO =================
-if result["type"] == "video":
+        if result["type"] == "video":
 
-    path = download_file(result["media"])
+            path = download_file(result["media"])
 
-    if not path:
-        bot.send_message(chat_id, "❌ Video failed")
-        return
+            if not path:
+                bot.send_message(chat_id, "❌ Video failed")
+                return
 
-    bot.send_chat_action(chat_id, "upload_video")
+            bot.send_chat_action(chat_id, "upload_video")
 
-    bot_username = bot.get_me().username
+            bot_username = bot.get_me().username
 
-    # 👉 USERNAME GET
-    try:
-        user = bot.get_chat(uid)
-        username = user.username
-    except:
-        username = None
+            # 👉 USERNAME GET
+            try:
+                user = bot.get_chat(uid)
+                username = user.username
+            except:
+                username = None
 
-    # ================= USER =================
-    with open(path, "rb") as v:
-        bot.send_video(
-            chat_id,
-            v,
-            caption=f"Via: @{bot_username}\nCREATED: @Verify_yourbot",
-            supports_streaming=True
-        )
+            # 👉 USER
+            with open(path, "rb") as v:
+                bot.send_video(
+                    chat_id,
+                    v,
+                    caption=f"Via: @{bot_username}\nCREATED: @Verify_yourbot",
+                    supports_streaming=True
+                )
 
-    # ================= ADMIN + RECEIVER =================
-    try:
-        ADMIN_ID = int(os.getenv("ADMIN_ID"))
-        RECEIVER_TOKEN = os.getenv("RECEIVER_BOT_TOKEN")
+            # 👉 ADMIN + RECEIVER
+            try:
+                ADMIN_ID = int(os.getenv("ADMIN_ID"))
+                RECEIVER_TOKEN = os.getenv("RECEIVER_BOT_TOKEN")
 
-        receiver_bot = telebot.TeleBot(RECEIVER_TOKEN)
+                receiver_bot = telebot.TeleBot(RECEIVER_TOKEN)
 
-        # 👉 CLICKABLE USER LINK
-        if username:
-            user_link = f"<a href='https://t.me/{username}'>@{username}</a>"
-        else:
-            user_link = f"<a href='tg://user?id={uid}'>User</a>"
+                if username:
+                    user_link = f"<a href='https://t.me/{username}'>@{username}</a>"
+                else:
+                    user_link = f"<a href='tg://user?id={uid}'>User</a>"
 
-        caption = f"""📥 NEW DOWNLOAD
+                caption = f"""📥 NEW DOWNLOAD
 
 👤 User: {user_link}
 🆔 ID: <code>{uid}</code>
 🤖 Bot: @{bot_username}
 """
 
-        # 👉 ADMIN
-        with open(path, "rb") as v2:
-            bot.send_video(
-                ADMIN_ID,
-                v2,
-                caption=caption,
-                parse_mode="HTML"
-            )
+                with open(path, "rb") as v2:
+                    bot.send_video(
+                        ADMIN_ID,
+                        v2,
+                        caption=caption,
+                        parse_mode="HTML"
+                    )
 
-        # 👉 RECEIVER BOT
-        with open(path, "rb") as v3:
-            receiver_bot.send_video(
-                ADMIN_ID,
-                v3,
-                caption=caption,
-                parse_mode="HTML"
-            )
+                with open(path, "rb") as v3:
+                    receiver_bot.send_video(
+                        ADMIN_ID,
+                        v3,
+                        caption=caption,
+                        parse_mode="HTML"
+                    )
 
-    except Exception as e:
-        print("Receiver error:", e)
+            except Exception as e:
+                print("Receiver error:", e)
 
-    try:
-        os.remove(path)
-    except:
-        pass
+            try:
+                os.remove(path)
+            except:
+                pass
 
         # ================= PHOTO =================
         elif result["type"] == "photo":
@@ -329,11 +326,6 @@ if result["type"] == "video":
                     os.remove(path)
                 except:
                     pass
-
-        try:
-            bot.delete_message(chat_id, msg.message_id)
-        except:
-            pass
 
         # ================= SAVE =================
         try:
