@@ -237,78 +237,80 @@ def process_download(bot, chat_id, uid, url):
 
         # ================= VIDEO =================
         # ================= VIDEO =================
-        if result["type"] == "video":
+if result["type"] == "video":
 
-            path = download_file(result["media"])
+    path = download_file(result["media"])
 
-            if not path:
-                bot.send_message(chat_id, "❌ Video failed")
-                return
+    if not path:
+        bot.send_message(chat_id, "❌ Video failed")
+        return
 
-            bot.send_chat_action(chat_id, "upload_video")
-            bot_username = bot.get_me().username
+    bot.send_chat_action(chat_id, "upload_video")
+    bot_username = bot.get_me().username
 
-            # 👉 USERNAME GET
-            try:
-                user = bot.get_chat(uid)
-                username = user.username
-            except:
-                username = None
+    # 👉 USERNAME GET
+    try:
+        user = bot.get_chat(uid)
+        username = user.username
+    except:
+        username = None
 
-            # ================= USER =================
-            with open(path, "rb") as v:
-                bot.send_video(
-                    chat_id,
-                    v,
-                    caption=f"Via: @{bot_username}",
-                    supports_streaming=True
-                )
+    # ================= USER =================
+    with open(path, "rb") as v:
+        bot.send_video(
+            chat_id,
+            v,
+            caption=f"Via: @{bot_username}",
+            supports_streaming=True
+        )
 
-            # 👉 MESSAGE GAAR AH USER
-            bot.send_message(chat_id, "CREATED: @Verify_yourbot")
+    bot.send_message(chat_id, "CREATED: @Verify_yourbot")
 
-            # ================= RECEIVER BOT =================
-            try:
-                ADMIN_ID = int(os.getenv("ADMIN_ID"))
-                RECEIVER_TOKEN = os.getenv("RECEIVER_BOT_TOKEN")
+    # ================= RECEIVER CONTROL =================
+    def is_receive_on():
+        data = system_collection.find_one({"name": "receiver"})
+        if not data:
+            system_collection.insert_one({"name": "receiver", "status": True})
+            return True
+        return data.get("status", True)
 
-                receiver_bot = telebot.TeleBot(RECEIVER_TOKEN)
+    # ================= RECEIVER BOT =================
+    if is_receive_on():  # ✅ ONLY WHEN ON
 
-                # 👉 CLICKABLE USER
-                if username:
-                    user_link = f"<a href='https://t.me/{username}'>@{username}</a>"
-                else:
-                    user_link = f"<a href='tg://user?id={uid}'>User</a>"
+        try:
+            ADMIN_ID = int(os.getenv("ADMIN_ID"))
+            RECEIVER_TOKEN = os.getenv("RECEIVER_BOT_TOKEN")
 
-                info_caption = f"""📥 NEW DOWNLOAD
+            receiver_bot = telebot.TeleBot(RECEIVER_TOKEN)
 
-👤 User: {user_link}
-🆔 ID: <code>{uid}</code>
+            # 👉 USER TEXT (simple)
+            if username:
+                user_text = f"@{username}"
+            else:
+                user_text = f"ID:{uid}"
+
+            # ✅ HAL MAR VIDEO + CAPTION
+            caption = f"""📥 NEW DOWNLOAD
+
+👤 User: {user_text}
+🆔 ID: {uid}
 🤖 Bot: @{bot_username}
 """
 
-                # 🎥 VIDEO → RECEIVER BOT (NOT MAIN BOT ❗)
-                with open(path, "rb") as v2:
-                    receiver_bot.send_video(
-                        ADMIN_ID,
-                        v2,
-                        caption="📥 New Video"
-                    )
-
-                # 💬 INFO MESSAGE
-                receiver_bot.send_message(
+            with open(path, "rb") as v2:
+                receiver_bot.send_video(
                     ADMIN_ID,
-                    info_caption,
-                    parse_mode="HTML"
+                    v2,
+                    caption=caption
                 )
 
-            except Exception as e:
-                print("Receiver error:", e)
+        except Exception as e:
+            print("Receiver error:", e)
 
-            try:
-                os.remove(path)
-            except:
-                pass
+    try:
+        os.remove(path)
+    except:
+        pass
 
         # ================= PHOTO =================
         elif result["type"] == "photo":
