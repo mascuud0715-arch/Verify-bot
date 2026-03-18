@@ -861,28 +861,6 @@ def unban_bot_btn(message):
 
     bot.send_message(message.chat.id, f"✅ @{username} unbanned")
 
-# ==============================
-# BOT CONTROL PANEL BUTTONS
-# ==============================
-def bot_control_buttons(username):
-    kb = InlineKeyboardMarkup()
-
-    kb.add(
-        InlineKeyboardButton("👤 See Username", callback_data=f"see_user:{username}"),
-        InlineKeyboardButton("🔑 See Token", callback_data=f"see_token:{username}")
-    )
-
-    kb.add(
-        InlineKeyboardButton("🚫 Ban Bot", callback_data=f"ban_bot:{username}"),
-        InlineKeyboardButton("✅ Unban Bot", callback_data=f"unban_bot:{username}")
-    )
-
-    kb.add(
-        InlineKeyboardButton("🔙 BACK MAIN MENU", callback_data="back_main")
-    )
-
-    return kb
-
 
 # ==============================
 # FINAL RUN LOOP 🚀
