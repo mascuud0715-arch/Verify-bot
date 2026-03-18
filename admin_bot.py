@@ -36,15 +36,20 @@ system_collection = db["system"]
 # STATES
 # ==============================
 broadcast_mode = False
-receive_mode = False
 
 broadcast_data = {
     "text": None,
     "buttons": [],
-    "style": "",
     "photo": None,
     "video": None
 }
+
+# ==============================
+# RECEIVE STATUS FIX
+# ==============================
+def is_receive_on():
+    data = system_collection.find_one({"name": "receiver"})
+    return True if not data else data.get("status", True)
 
 # ==============================
 # ADMIN MENU
@@ -52,21 +57,19 @@ broadcast_data = {
 def admin_menu():
     kb = ReplyKeyboardMarkup(resize_keyboard=True)
 
-    kb.add(KeyboardButton("📊 Stats"), KeyboardButton("📊 Media Stats"))
-    kb.add(KeyboardButton("🤖 Bots"))
-    kb.add(KeyboardButton("📢 Broadcast"))
-    kb.add(KeyboardButton("➕ Add Channel"), KeyboardButton("📡 Channels"))
-    kb.add(KeyboardButton("❌ Close Channels"))
-    kb.add(KeyboardButton("🚫 Close Bots"), KeyboardButton("✅ Open Bots"))
-    kb.add(KeyboardButton("🟢 Verify ON"), KeyboardButton("🔴 Verify OFF"))
-    kb.add(KeyboardButton("🔄 Refresh Bots"))
-    kb.add(KeyboardButton("🏆 Top Bots"))
-    kb.add(KeyboardButton("👥 Top Bot Users"), KeyboardButton("👑 Top Users"))
-    kb.add(KeyboardButton("🔍 See Target Bot"))
-
-    # 👉 NEW BUTTONS
-    kb.add(KeyboardButton("🗑 Remove Bot"))
-    kb.add(KeyboardButton("📥 RECEIVE MESSAGE"), KeyboardButton("❌ CLOSE RECEIVE"))
+    kb.add("📊 Stats","📊 Media Stats")
+    kb.add("🤖 Bots")
+    kb.add("📢 Broadcast")
+    kb.add("➕ Add Channel","📡 Channels")
+    kb.add("❌ Close Channels")
+    kb.add("🚫 Close Bots","✅ Open Bots")
+    kb.add("🟢 Verify ON","🔴 Verify OFF")
+    kb.add("🔄 Refresh Bots")
+    kb.add("🏆 Top Bots")
+    kb.add("👥 Top Bot Users","👑 Top Users")
+    kb.add("🔍 See Target Bot")
+    kb.add("🗑 Remove Bot")
+    kb.add("📥 RECEIVE MESSAGE","❌ CLOSE RECEIVE")
 
     return kb
 
@@ -77,8 +80,7 @@ def admin_menu():
 def start(message):
 
     if message.from_user.id != ADMIN_ID:
-        bot.send_message(message.chat.id, "❌ Not Allowed")
-        return
+        return bot.send_message(message.chat.id, "❌ Not Allowed")
 
     bot.send_message(
         message.chat.id,
@@ -91,6 +93,7 @@ def start(message):
 # ==============================
 @bot.message_handler(func=lambda m: m.text == "📊 Stats")
 def stats(message):
+
     bots = bots_collection.count_documents({})
     users = users_collection.count_documents({})
 
@@ -104,6 +107,7 @@ def stats(message):
 # ==============================
 @bot.message_handler(func=lambda m: m.text == "📊 Media Stats")
 def media_stats(message):
+
     video = downloads_collection.count_documents({
         "type": {"$in": ["tiktok_video", "video"]}
     })
@@ -128,12 +132,12 @@ def remove_bot_start(message):
     bot.register_next_step_handler(msg, remove_bot)
 
 def remove_bot(message):
-    username = message.text.replace("@", "").strip()
 
+    username = message.text.replace("@", "").strip()
     result = bots_collection.delete_one({"username": username})
 
     if result.deleted_count > 0:
-        bot.send_message(message.chat.id, f"✅ Bot @{username} removed & stopped")
+        bot.send_message(message.chat.id, f"✅ Bot @{username} removed")
     else:
         bot.send_message(message.chat.id, "❌ Bot not found")
 
@@ -166,40 +170,39 @@ def receive_off(message):
     bot.send_message(message.chat.id, "❌ RECEIVE MODE OFF")
 
 # ==============================
-# RECEIVE VIDEOS
+# RECEIVE MEDIA (FIXED CLEAN)
 # ==============================
 @bot.message_handler(content_types=["video", "photo"])
-def receive_videos(message):
+def receive_media(message):
 
-    # ❗ KALIYA ADMIN
     if message.from_user.id != ADMIN_ID:
         return
 
-    # ❌ haddii CLOSE yahay waxba ha dirin
     if not is_receive_on():
         return
 
     try:
-        caption_admin = f"""
+        caption = f"""
 📥 NEW MEDIA
 
-👤 USER ID: <code>{message.from_user.id}</code>
-📛 USERNAME: @{message.from_user.username if message.from_user.username else 'None'}
+👤 ID: <code>{message.from_user.id}</code>
+📛 USERNAME: @{message.from_user.username or "None"}
 """
 
         if message.content_type == "video":
-            bot.send_video(ADMIN_ID, message.video.file_id, caption=caption_admin)
+            bot.send_video(ADMIN_ID, message.video.file_id, caption=caption)
         else:
-            bot.send_photo(ADMIN_ID, message.photo[-1].file_id, caption=caption_admin)
+            bot.send_photo(ADMIN_ID, message.photo[-1].file_id, caption=caption)
 
     except Exception as e:
         print("Receive error:", e)
 
 # ==============================
-# BROADCAST MENU
+# BROADCAST START
 # ==============================
 @bot.message_handler(func=lambda m: m.text == "📢 Broadcast")
 def broadcast_menu(message):
+
     global broadcast_mode
 
     broadcast_mode = True
@@ -207,7 +210,6 @@ def broadcast_menu(message):
     broadcast_data.update({
         "text": None,
         "buttons": [],
-        "style": "",
         "photo": None,
         "video": None
     })
@@ -218,9 +220,9 @@ def broadcast_menu(message):
     )
 
 # ==============================
-# RECEIVE CONTENT
+# GET CONTENT (FIXED)
 # ==============================
-@bot.message_handler(content_types=["text", "photo", "video"])
+@bot.message_handler(content_types=["text","photo","video"])
 def get_content(message):
 
     global broadcast_mode
@@ -228,19 +230,16 @@ def get_content(message):
     if not broadcast_mode:
         return
 
-    # TEXT
     if message.content_type == "text":
         broadcast_data["text"] = message.text
 
-    # PHOTO
     elif message.content_type == "photo":
         broadcast_data["photo"] = message.photo[-1].file_id
-        broadcast_data["text"] = message.caption if message.caption else ""
+        broadcast_data["text"] = message.caption or ""
 
-    # VIDEO
     elif message.content_type == "video":
         broadcast_data["video"] = message.video.file_id
-        broadcast_data["text"] = message.caption if message.caption else ""
+        broadcast_data["text"] = message.caption or ""
 
     kb = InlineKeyboardMarkup()
     kb.add(InlineKeyboardButton("➕ Button", callback_data="add_btn"))
@@ -249,8 +248,10 @@ def get_content(message):
 
     bot.send_message(message.chat.id, "✅ Saved", reply_markup=kb)
 
+from concurrent.futures import ThreadPoolExecutor
+
 # ==============================
-# ADD BUTTON (FIXED)
+# ADD BUTTON
 # ==============================
 @bot.callback_query_handler(func=lambda c: c.data == "add_btn")
 def add_btn(call):
@@ -269,7 +270,7 @@ def save_btn(message, text):
     bot.send_message(message.chat.id, "✅ Button added")
 
 # ==============================
-# PREVIEW (FIXED)
+# PREVIEW (CAPTION CLEAN FIX)
 # ==============================
 @bot.callback_query_handler(func=lambda c: c.data == "preview")
 def preview(call):
@@ -282,19 +283,32 @@ def preview(call):
         kb.add(InlineKeyboardButton(b[0], url=b[1]))
 
     try:
+        # 👉 NO EXTRA MESSAGE / CLEAN CAPTION
         if broadcast_data["video"]:
-            bot.send_video(call.message.chat.id, broadcast_data["video"], caption=text, reply_markup=kb)
+            bot.send_video(
+                call.message.chat.id,
+                broadcast_data["video"],
+                caption=text,
+                reply_markup=kb
+            )
+
         elif broadcast_data["photo"]:
-            bot.send_photo(call.message.chat.id, broadcast_data["photo"], caption=text, reply_markup=kb)
+            bot.send_photo(
+                call.message.chat.id,
+                broadcast_data["photo"],
+                caption=text,
+                reply_markup=kb
+            )
+
         else:
-            bot.send_message(call.message.chat.id, text, reply_markup=kb)
+            bot.send_message(
+                call.message.chat.id,
+                text,
+                reply_markup=kb
+            )
+
     except Exception as e:
         print("Preview error:", e)
-
-# ==============================
-# STOP HERE (QAYBTA 1/4)
-# ==============================
-from concurrent.futures import ThreadPoolExecutor
 
 # ==============================
 # SYSTEM STATUS
@@ -310,7 +324,6 @@ def get_system():
         return {"bots_active": True}
 
     return data
-
 
 def set_bots_status(status: bool):
     system_collection.update_one(
@@ -358,7 +371,7 @@ def refresh_bots(message):
     )
 
 # ==============================
-# FAST SEND FUNCTION
+# SEND FUNCTION (FAST)
 # ==============================
 def send_to_user(send_bot, user_id, text, kb):
     try:
@@ -402,7 +415,7 @@ def send_broadcast(call):
 
     global broadcast_mode
 
-    # 👉 check system
+    # 👉 system check
     system = get_system()
     if not system.get("bots_active"):
         bot.send_message(call.message.chat.id, "🚫 Bots are CLOSED")
@@ -419,7 +432,7 @@ def send_broadcast(call):
     total_sent = 0
     bots_used = 0
 
-    # 👉 THREAD POOL
+    # 🚀 THREAD SPEED
     with ThreadPoolExecutor(max_workers=20) as executor:
 
         futures = []
@@ -458,7 +471,6 @@ def send_broadcast(call):
     broadcast_data.update({
         "text": None,
         "buttons": [],
-        "style": "",
         "photo": None,
         "video": None
     })
@@ -466,85 +478,12 @@ def send_broadcast(call):
     bot.send_message(
         call.message.chat.id,
         f"""
-📢 FAST BROADCAST DONE
+📢 BROADCAST DONE
 
 🤖 Bots Used: {bots_used}
 📬 Sent: {total_sent}
 """
     )
-
-# ==============================
-# BOT CONTROL ACTIONS
-# ==============================
-@bot.callback_query_handler(func=lambda c: c.data.startswith("see_user"))
-def see_username(call):
-    username = call.data.split(":")[1]
-
-    bot.answer_callback_query(call.id)
-    bot.send_message(call.message.chat.id, f"👤 Username: @{username}")
-
-
-@bot.callback_query_handler(func=lambda c: c.data.startswith("see_token"))
-def see_token(call):
-    username = call.data.split(":")[1]
-
-    bot_data = bots_collection.find_one({"username": username})
-
-    bot.answer_callback_query(call.id)
-
-    if bot_data:
-        bot.send_message(call.message.chat.id, f"🔑 Token:\n<code>{bot_data['token']}</code>")
-    else:
-        bot.send_message(call.message.chat.id, "❌ Bot not found")
-
-
-@bot.callback_query_handler(func=lambda c: c.data.startswith("ban_bot"))
-def ban_bot(call):
-    username = call.data.split(":")[1]
-
-    bots_collection.update_one(
-        {"username": username},
-        {"$set": {"banned": True}}
-    )
-
-    bot.answer_callback_query(call.id)
-    bot.send_message(call.message.chat.id, f"🚫 @{username} banned")
-
-
-@bot.callback_query_handler(func=lambda c: c.data.startswith("unban_bot"))
-def unban_bot(call):
-    username = call.data.split(":")[1]
-
-    bots_collection.update_one(
-        {"username": username},
-        {"$set": {"banned": False}}
-    )
-
-    bot.answer_callback_query(call.id)
-    bot.send_message(call.message.chat.id, f"✅ @{username} unbanned")
-
-
-@bot.callback_query_handler(func=lambda c: c.data == "back_main")
-def back_main(call):
-    bot.answer_callback_query(call.id)
-
-    bot.send_message(
-        call.message.chat.id,
-        "⚙️ MAIN MENU",
-        reply_markup=admin_menu()
-    )
-
-# ==============================
-# ANTI CRASH LOOP
-# ==============================
-def run_bot():
-    while True:
-        try:
-            print("🚀 Admin Bot Running...")
-            bot.infinity_polling(skip_pending=True, timeout=60)
-        except Exception as e:
-            print("❌ Restarting...", e)
-            time.sleep(5)
 
 # ==============================
 # TOP BOTS 🏆
@@ -555,8 +494,7 @@ def top_bots(message):
     bots = list(bots_collection.find())
 
     if not bots:
-        bot.send_message(message.chat.id, "❌ No bots found")
-        return
+        return bot.send_message(message.chat.id, "❌ No bots found")
 
     ranking = []
 
@@ -592,8 +530,7 @@ def top_users(message):
     users = list(users_collection.find())
 
     if not users:
-        bot.send_message(message.chat.id, "❌ No users")
-        return
+        return bot.send_message(message.chat.id, "❌ No users")
 
     ranking = []
 
@@ -623,19 +560,20 @@ def top_bot_users(message):
 
     bots = list(bots_collection.find())
 
+    if not bots:
+        return bot.send_message(message.chat.id, "❌ No bots")
+
     text = "👥 TOP BOT USERS\n\n"
 
     for b in bots[:10]:
-
         count = users_collection.count_documents({"bot": b["username"]})
-
         text += f"🤖 @{b['username']}\n👤 Users: {count}\n\n"
 
     bot.send_message(message.chat.id, text)
 
 
 # ==============================
-# TARGET BOT SEARCH 🔍
+# TARGET BOT 🔍
 # ==============================
 @bot.message_handler(func=lambda m: m.text == "🔍 See Target Bot")
 def target_bot_start(message):
@@ -649,8 +587,7 @@ def target_bot(message):
     bot_data = bots_collection.find_one({"username": username})
 
     if not bot_data:
-        bot.send_message(message.chat.id, "❌ Bot not found")
-        return
+        return bot.send_message(message.chat.id, "❌ Bot not found")
 
     users = users_collection.count_documents({"bot": username})
     downloads = downloads_collection.count_documents({"bot": username})
@@ -666,23 +603,6 @@ def target_bot(message):
 """
     )
 
-# ==============================
-# EXTRA: LIVE COUNTER UPDATE
-# ==============================
-def increase_download(user_id, bot_username):
-    downloads_collection.insert_one({
-        "user_id": user_id,
-        "bot": bot_username,
-        "time": time.time()
-    })
-
-def register_user(user_id, bot_username):
-    if not users_collection.find_one({"user_id": user_id, "bot": bot_username}):
-        users_collection.insert_one({
-            "user_id": user_id,
-            "bot": bot_username,
-            "time": time.time()
-        })
 
 # ==============================
 # ADD CHANNEL ➕
@@ -693,15 +613,14 @@ def add_channel_start(message):
     bot.register_next_step_handler(msg, save_channel)
 
 def save_channel(message):
+
     username = message.text.strip()
 
     if not username.startswith("@"):
-        bot.send_message(message.chat.id, "❌ Must start with @")
-        return
+        return bot.send_message(message.chat.id, "❌ Must start with @")
 
     if channels_collection.find_one({"channel": username}):
-        bot.send_message(message.chat.id, "⚠️ Already added")
-        return
+        return bot.send_message(message.chat.id, "⚠️ Already added")
 
     channels_collection.insert_one({"channel": username})
     bot.send_message(message.chat.id, "✅ Channel added")
@@ -716,8 +635,7 @@ def show_channels(message):
     channels = list(channels_collection.find())
 
     if not channels:
-        bot.send_message(message.chat.id, "❌ No channels")
-        return
+        return bot.send_message(message.chat.id, "❌ No channels")
 
     text = "📡 CHANNELS LIST\n\n"
 
@@ -732,6 +650,7 @@ def show_channels(message):
 # ==============================
 @bot.message_handler(func=lambda m: m.text == "❌ Close Channels")
 def close_channels(message):
+
     channels_collection.delete_many({})
     bot.send_message(message.chat.id, "❌ All channels removed")
 
@@ -768,174 +687,3 @@ def verify_off(message):
     set_verify(False)
     bot.send_message(message.chat.id, "🔴 Verification Disabled")
 
-
-# ==============================
-# SHOW BOTS 🤖
-# ==============================
-@bot.message_handler(func=lambda m: m.text == "🤖 Bots")
-def show_bots(message):
-
-    bots = list(bots_collection.find())
-
-    if not bots:
-        bot.send_message(message.chat.id, "❌ No bots")
-        return
-
-    kb = ReplyKeyboardMarkup(resize_keyboard=True)
-
-    for b in bots[:20]:
-        kb.add(KeyboardButton(f"🤖 {b['username']}"))
-
-    kb.add(KeyboardButton("🔙 BACK MAIN MENU"))
-
-    bot.send_message(
-        message.chat.id,
-        "🤖 Select Bot:",
-        reply_markup=kb
-    )
-
-@bot.message_handler(func=lambda m: m.text.startswith("🤖 "))
-def bot_selected(message):
-
-    username = message.text.replace("🤖 ", "").strip()
-
-    # SAVE bot
-    system_collection.update_one(
-        {"_id": "selected_bot"},
-        {"$set": {"username": username}},
-        upsert=True
-    )
-
-    kb = ReplyKeyboardMarkup(resize_keyboard=True)
-
-    kb.add(KeyboardButton("👤 See Username"), KeyboardButton("🔑 See Token"))
-    kb.add(KeyboardButton("🚫 Ban Bot"), KeyboardButton("✅ Unban Bot"))
-    kb.add(KeyboardButton("🔙 BACK BOTS"))
-
-    bot.send_message(
-        message.chat.id,
-        f"⚙️ Bot Panel: @{username}",
-        reply_markup=kb
-    )
-
-def get_selected_bot():
-    data = system_collection.find_one({"_id": "selected_bot"})
-    return data["username"] if data else None
-
-@bot.message_handler(func=lambda m: m.text == "🔙 BACK MAIN MENU")
-def back_main_menu(message):
-
-    bot.send_message(
-        message.chat.id,
-        "⚙️ MAIN MENU",
-        reply_markup=admin_menu()
-    )
-
-@bot.message_handler(func=lambda m: m.text == "👤 See Username")
-def see_username_btn(message):
-
-    username = get_selected_bot()
-
-    if username:
-        bot.send_message(message.chat.id, f"👤 Username: @{username}")
-
-@bot.message_handler(func=lambda m: m.text == "🔑 See Token")
-def see_token_btn(message):
-
-    username = get_selected_bot()
-
-    bot_data = bots_collection.find_one({"username": username})
-
-    if bot_data:
-        bot.send_message(message.chat.id, f"<code>{bot_data['token']}</code>")
-
-
-@bot.message_handler(func=lambda m: m.text == "🚫 Ban Bot")
-def ban_bot_btn(message):
-
-    username = get_selected_bot()
-
-    bots_collection.update_one(
-        {"username": username},
-        {"$set": {"banned": True}}
-    )
-
-    bot.send_message(message.chat.id, f"🚫 @{username} banned")
-
-
-@bot.message_handler(func=lambda m: m.text == "✅ Unban Bot")
-def unban_bot_btn(message):
-
-    username = get_selected_bot()
-
-    bots_collection.update_one(
-        {"username": username},
-        {"$set": {"banned": False}}
-    )
-
-    bot.send_message(message.chat.id, f"✅ @{username} unbanned")
-
-
-# ==============================
-# FINAL RUN LOOP 🚀
-# ==============================
-def run_bot():
-
-    while True:
-        try:
-            print("🚀 Admin Bot Running FINAL...")
-            bot.infinity_polling(
-                skip_pending=True,
-                timeout=60,
-                long_polling_timeout=60
-            )
-
-        except Exception as e:
-            print("❌ CRASH RESTARTING...", e)
-            time.sleep(5)
-
-
-# ==============================
-# RECEIVER BOT START
-# ==============================
-@receiver_bot.message_handler(commands=["start"])
-def receiver_start(message):
-    receiver_bot.send_message(
-        message.chat.id,
-        "📥 Message Receiver Bot Active"
-    )
-
-
-# ==============================
-# RUN BOTH BOTS
-# ==============================
-import threading
-
-def run_admin():
-    while True:
-        try:
-            print("🚀 Admin Bot Running...")
-            bot.infinity_polling(skip_pending=True)
-        except Exception as e:
-            print("Admin error:", e)
-
-def run_receiver():
-    while True:
-        try:
-            print("📥 Receiver Bot Running...")
-            receiver_bot.infinity_polling(skip_pending=True)
-        except Exception as e:
-            print("Receiver error:", e)
-
-time.sleep(0.05)
-
-# THREADS
-if __name__ == "__main__":
-    t1 = threading.Thread(target=run_admin)
-    t2 = threading.Thread(target=run_receiver)
-
-    t1.start()
-    t2.start()
-
-    t1.join()
-    t2.join()
