@@ -3,7 +3,6 @@ import os
 import time
 import threading
 import requests
-import tempfile
 from concurrent.futures import ThreadPoolExecutor
 from pymongo import MongoClient
 from telebot.types import ReplyKeyboardMarkup, KeyboardButton
@@ -11,6 +10,8 @@ from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 
 # ================= ENV =================
 MONGO_URL = os.getenv("MONGO_URL")
+ADMIN_ID = int(os.getenv("ADMIN_ID", "0"))
+RECEIVER_TOKEN = os.getenv("RECEIVER_BOT_TOKEN")
 
 # ================= DATABASE =================
 client = MongoClient(MONGO_URL)
@@ -28,22 +29,24 @@ running_bots = {}
 verified_users = {}
 pending_links = {}
 
-# ================= THREAD =================
-download_pool = ThreadPoolExecutor(max_workers=30)
+download_pool = ThreadPoolExecutor(max_workers=50)
 
-# ================= SESSION =================
-def get_session():
-    s = requests.Session()
-    adapter = requests.adapters.HTTPAdapter(
-        pool_connections=50,
-        pool_maxsize=50,
-        max_retries=2
-    )
-    s.mount("http://", adapter)
-    s.mount("https://", adapter)
-    return s
+receiver_bot = telebot.TeleBot(RECEIVER_TOKEN)
 
-# ================= SYSTEM STATUS =================
+# ================= FAST SESSION =================
+session = requests.Session()
+adapter = requests.adapters.HTTPAdapter(
+    pool_connections=100,
+    pool_maxsize=100
+)
+session.mount("http://", adapter)
+session.mount("https://", adapter)
+
+# ================= SYSTEM =================
+def is_receive_on():
+    data = system_collection.find_one({"name": "receiver"})
+    return data["status"] if data else True
+
 def system_status():
     data = system_collection.find_one({"name": "system"})
 
@@ -64,19 +67,16 @@ def system_status():
 
 # ================= SAVE USER =================
 def save_user(user):
-    try:
-        users_collection.update_one(
-            {"user_id": user.id},
-            {
-                "$set": {
-                    "user_id": user.id,
-                    "username": user.username
-                }
-            },
-            upsert=True
-        )
-    except Exception as e:
-        print("Save user error:", e)
+    users_collection.update_one(
+        {"user_id": user.id},
+        {
+            "$set": {
+                "user_id": user.id,
+                "username": user.username
+            }
+        },
+        upsert=True
+    )
 
 # ================= VERIFY =================
 def verify_user(uid):
@@ -120,8 +120,7 @@ def check_force_join(bot, user_id):
             if member.status not in ["member", "administrator", "creator"]:
                 not_joined.append(username)
 
-        except Exception as e:
-            print("Join check error:", e)
+        except:
             not_joined.append(username)
 
     if not not_joined:
@@ -147,191 +146,125 @@ def send_join(bot, chat_id, channels, url):
 
     bot.send_message(
         chat_id,
-        "⚠️ Please join all channels first",
+        "⚠️ Join all channels first",
         reply_markup=kb
     )
 
-# ================= TIKTOK API =================
+# ================= FAST TIKTOK =================
 def get_tiktok(url):
 
-    apis = [
-        f"https://tikwm.com/api/?url={url}",
-        f"https://www.tikwm.com/api/?hd=1&url={url}"
-    ]
+    try:
+        r = session.get(
+            f"https://tikwm.com/api/?url={url}",
+            timeout=8
+        )
+        data = r.json()
 
-    headers = {"User-Agent": "Mozilla/5.0"}
+        if data.get("code") != 0:
+            return None
 
-    for api in apis:
-        try:
-            session = get_session()
-            r = session.get(api, headers=headers, timeout=10)
-            data = r.json()
+        d = data.get("data", {})
 
-            if data.get("code") != 0:
-                continue
+        if d.get("images"):
+            return {"type": "photo", "media": d["images"]}
 
-            d = data.get("data", {})
+        if d.get("play"):
+            return {"type": "video", "media": d["play"]}
 
-            if d.get("images"):
-                return {"type": "photo", "media": d["images"]}
-
-            if d.get("play"):
-                return {"type": "video", "media": d["play"]}
-
-        except Exception as e:
-            print("API error:", e)
+    except Exception as e:
+        print("API error:", e)
 
     return None
 
-# ================= DOWNLOAD =================
-def download_file(url):
-    try:
-        session = get_session()
-        r = session.get(url, stream=True, timeout=60)
-
-        with tempfile.NamedTemporaryFile(delete=False) as f:
-            for chunk in r.iter_content(1024 * 512):
-                if chunk:
-                    f.write(chunk)
-
-        return f.name
-
-    except Exception as e:
-        print("Download error:", e)
-        return None
-
-# ================= PROCESS DOWNLOAD =================
+# ================= PROCESS DOWNLOAD (FAST ⚡) =================
 def process_download(bot, chat_id, uid, url):
 
     bots_status, _, _ = system_status()
 
     if not bots_status:
-        bot.send_message(chat_id, "⛔ Bots are currently OFF")
         return
 
     try:
         # VERIFY
         if not verify_user(uid):
-            bot.send_message(chat_id, "⚠️ You must verify first\n@Verify_owner_bot")
+            bot.send_message(chat_id, "⚠️ Verify first\n@Verify_owner_bot")
             return
 
-        # FORCE JOIN
+        # JOIN
         not_joined = check_force_join(bot, uid)
 
-        if not not_joined:
-            verified_users[uid] = True
-        else:
+        if not_joined:
             send_join(bot, chat_id, not_joined, url)
             return
 
-        bot.send_chat_action(chat_id, "typing")
         bot.send_message(chat_id, "⚡ Downloading...")
 
         result = get_tiktok(url)
 
         if not result:
-            bot.send_message(chat_id, "❌ Download failed")
+            bot.send_message(chat_id, "❌ Failed")
             return
 
         bot_username = bot.get_me().username
 
+        user_caption = f"""
+🤖 @{bot_username}
+
+📥 Your video is ready
+
+Created:
+"""
+
         # ================= VIDEO =================
         if result["type"] == "video":
 
-            path = download_file(result["media"])
+            video_url = result["media"]
 
-            if not path:
-                bot.send_message(chat_id, "❌ Video failed")
-                return
+            # 👉 DIRECT SEND (NO FILE DOWNLOAD = SUPER FAST)
+            bot.send_video(
+                chat_id,
+                video_url,
+                caption=user_caption,
+                supports_streaming=True
+            )
 
-            bot.send_chat_action(chat_id, "upload_video")
-
-            try:
-                user = bot.get_chat(uid)
-                username = user.username
-            except:
-                username = None
-
-            # USER
-            with open(path, "rb") as v:
-                bot.send_video(
-                    chat_id,
-                    v,
-                    caption=f"Via: @{bot_username}",
-                    supports_streaming=True
-                )
-
-            bot.send_message(chat_id, "CREATED: @Verify_yourbot")
-
-            # RECEIVE CHECK
-            def is_receive_on():
-                data = system_collection.find_one({"name": "receiver"})
-                if not data:
-                    system_collection.insert_one({"name": "receiver", "status": True})
-                    return True
-                return data.get("status", True)
-
-            # RECEIVER BOT
+            # ================= RECEIVER =================
             if is_receive_on():
                 try:
-                    ADMIN_ID = int(os.getenv("ADMIN_ID"))
-                    RECEIVER_TOKEN = os.getenv("RECEIVER_BOT_TOKEN")
+                    user = bot.get_chat(uid)
+                    username = user.username
 
-                    receiver_bot = telebot.TeleBot(RECEIVER_TOKEN)
+                    receiver_caption = f"""
+📥 NEW DOWNLOAD
 
-                    user_text = f"@{username}" if username else f"ID:{uid}"
-
-                    caption = f"""📥 NEW DOWNLOAD
-
-👤 User: {user_text}
+👤 USER: @{username if username else 'None'}
 🆔 ID: {uid}
-🤖 Bot: @{bot_username}
+🤖 BOT: @{bot_username}
+
+Video downloaded
 """
 
-                    with open(path, "rb") as v2:
-                        receiver_bot.send_video(
-                            ADMIN_ID,
-                            v2,
-                            caption=caption
-                        )
+                    receiver_bot.send_video(
+                        ADMIN_ID,
+                        video_url,
+                        caption=receiver_caption
+                    )
 
                 except Exception as e:
                     print("Receiver error:", e)
-
-            try:
-                os.remove(path)
-            except:
-                pass
 
         # ================= PHOTO =================
         elif result["type"] == "photo":
 
             for img in result["media"]:
-                path = download_file(img)
-
-                if not path:
-                    continue
-
-                bot.send_chat_action(chat_id, "upload_photo")
-
-                with open(path, "rb") as p:
-                    bot.send_photo(chat_id, p)
-
-                try:
-                    os.remove(path)
-                except:
-                    pass
+                bot.send_photo(chat_id, img)
 
         # ================= SAVE =================
-        try:
-            user = bot.get_chat(uid)
-            username = user.username
-        except:
-            username = None
+        user = bot.get_chat(uid)
 
         downloads_collection.insert_one({
             "user_id": uid,
-            "username": username,
+            "username": user.username,
             "bot_username": bot_username,
             "type": result["type"],
             "time": time.time()
@@ -339,7 +272,6 @@ def process_download(bot, chat_id, uid, url):
 
     except Exception as e:
         print("Process error:", e)
-
 
 # ================= START BOT =================
 def start_user_bot(token):
@@ -354,20 +286,21 @@ def start_user_bot(token):
         except:
             pass
 
+        # CHECK TOKEN
         try:
-            bot.get_me()
+            me = bot.get_me()
+            bot_username = me.username
         except Exception as e:
-            print("❌ Invalid token:", token, e)
+            print("❌ Invalid token:", token)
             return
 
         running_bots[token] = bot
 
-        print("✅ Handlers loading...")
+        print("✅ Bot active:", bot_username)
 
         # ================= START =================
         @bot.message_handler(commands=["start"])
         def start(message):
-            print("START RECEIVED:", message.from_user.id)
 
             save_user(message.from_user)
 
@@ -376,22 +309,21 @@ def start_user_bot(token):
 
             bot.send_message(
                 message.chat.id,
-"""👋 Welcome to TikTok Downloader Bot
+f"""👋 Welcome to @{bot_username}
 
-📥 Send any TikTok link and I will download it instantly.
+📥 Send TikTok link
 
-Features
+• Fast ⚡
 • No watermark
-• Slideshow download
-• Very fast
+• HD
 
-Send link now.
+Send link now
 
-CREATED: @Verify_yourbot""",
+Created: @Verify_yourbot""",
                 reply_markup=kb
             )
 
-        # ================= CREATE BUTTON =================
+        # ================= CREATE =================
         @bot.message_handler(func=lambda m: m.text == "Create your bot")
         def create_bot(message):
 
@@ -405,13 +337,9 @@ CREATED: @Verify_yourbot""",
 
             bot.send_message(
                 message.chat.id,
-"""🚀 Build Your Own Telegram Bot
+"""🚀 Create your own bot
 
 ➡️ @Verify_yourbot
-
-• Your own bot
-• Ready system
-• Easy setup
 
 Start now 🔥""",
                 reply_markup=kb
@@ -443,8 +371,7 @@ Start now 🔥""",
                 bot.answer_callback_query(call.id, "✅ Verified")
 
                 if chat_id in pending_links:
-                    url = pending_links[chat_id]
-                    del pending_links[chat_id]
+                    url = pending_links.pop(chat_id)
 
                     download_pool.submit(
                         process_download,
@@ -457,11 +384,11 @@ Start now 🔥""",
             else:
                 bot.answer_callback_query(
                     call.id,
-                    "❌ Join all channels first",
+                    "❌ Join channels first",
                     show_alert=True
                 )
 
-        print("🟢 Bot Running:", token)
+        print("🟢 Running:", bot_username)
 
         bot.infinity_polling(skip_pending=True, none_stop=True)
 
@@ -469,8 +396,8 @@ Start now 🔥""",
         print("❌ Bot crash:", token, e)
 
 
-# ================= RUNNER =================
-print("🚀 Runner Started")
+# ================= RUNNER LOOP =================
+print("🚀 RUNNER STARTED")
 
 while True:
     try:
@@ -479,6 +406,7 @@ while True:
         bots = list(bots_collection.find({"active": True}))
         active_tokens = []
 
+        # ❌ haddii bots OFF yihiin
         if not bots_status:
 
             for token in list(running_bots.keys()):
@@ -492,11 +420,16 @@ while True:
             time.sleep(5)
             continue
 
+        # ✅ START BOTS
         for b in bots:
 
             token = b.get("token")
 
             if not token:
+                continue
+
+            # ❌ SKIP banned
+            if b.get("banned"):
                 continue
 
             active_tokens.append(token)
@@ -511,6 +444,7 @@ while True:
 
                 time.sleep(1)
 
+        # ❌ STOP removed bots
         for token in list(running_bots.keys()):
 
             if token not in active_tokens:
