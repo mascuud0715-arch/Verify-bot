@@ -470,59 +470,76 @@ Start now 🔥""",
 
 
 # ================= RUNNER =================
-print("🚀 Runner Started")
+starting_tokens = set()
 
-while True:
-    try:
-        bots_status, _, _ = system_status()
+def runner_loop():
 
-        bots = list(bots_collection.find({"active": True}))
-        active_tokens = []
+    print("🚀 RUNNER STARTED")
 
-        if not bots_status:
+    while True:
+        try:
+            bots_status, _, _ = system_status()
 
-            for token in list(running_bots.keys()):
-                try:
-                    running_bots[token].stop_polling()
-                except:
-                    pass
+            bots = list(bots_collection.find({"active": True}))
+            active_tokens = []
 
-                del running_bots[token]
+            if not bots_status:
 
-            time.sleep(5)
-            continue
+                for token in list(running_bots.keys()):
+                    try:
+                        running_bots[token].stop_polling()
+                    except:
+                        pass
 
-        for b in bots:
+                    del running_bots[token]
 
-            token = b.get("token")
-
-            if not token:
+                time.sleep(5)
                 continue
 
-            active_tokens.append(token)
+            for b in bots:
 
-            if token not in running_bots:
+                token = b.get("token")
 
-                threading.Thread(
-                    target=start_user_bot,
-                    args=(token,),
-                    daemon=True
-                ).start()
+                if not token:
+                    continue
 
-                time.sleep(1)
+                if b.get("banned"):
+                    continue
 
-        for token in list(running_bots.keys()):
+                active_tokens.append(token)
 
-            if token not in active_tokens:
+                # 🔥 ANTI DOUBLE START
+                if token not in running_bots and token not in starting_tokens:
 
-                try:
-                    running_bots[token].stop_polling()
-                except:
-                    pass
+                    starting_tokens.add(token)
 
-                del running_bots[token]
+                    def run_bot(t):
+                        try:
+                            start_user_bot(t)
+                        finally:
+                            starting_tokens.discard(t)
 
-    except Exception as e:
-        print("Runner error:", e)
+                    threading.Thread(
+                        target=run_bot,
+                        args=(token,),
+                        daemon=True
+                    ).start()
 
-    time.sleep(3)
+                    time.sleep(1)
+
+            # ❌ STOP REMOVED
+            for token in list(running_bots.keys()):
+
+                if token not in active_tokens:
+
+                    try:
+                        running_bots[token].stop_polling()
+                    except:
+                        pass
+
+                    del running_bots[token]
+
+        except Exception as e:
+            print("Runner error:", e)
+
+        time.sleep(3)
