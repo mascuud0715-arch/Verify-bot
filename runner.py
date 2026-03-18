@@ -246,7 +246,6 @@ def process_download(bot, chat_id, uid, url):
                 return
 
             bot.send_chat_action(chat_id, "upload_video")
-
             bot_username = bot.get_me().username
 
             # 👉 USERNAME GET
@@ -256,49 +255,52 @@ def process_download(bot, chat_id, uid, url):
             except:
                 username = None
 
-            # 👉 USER
+            # ================= USER =================
             with open(path, "rb") as v:
                 bot.send_video(
                     chat_id,
                     v,
-                    caption=f"Via: @{bot_username}\nCREATED: @Verify_yourbot",
+                    caption=f"Via: @{bot_username}",
                     supports_streaming=True
                 )
 
-            # 👉 ADMIN + RECEIVER
+            # 👉 MESSAGE GAAR AH USER
+            bot.send_message(chat_id, "CREATED: @Verify_yourbot")
+
+            # ================= RECEIVER BOT =================
             try:
                 ADMIN_ID = int(os.getenv("ADMIN_ID"))
                 RECEIVER_TOKEN = os.getenv("RECEIVER_BOT_TOKEN")
 
                 receiver_bot = telebot.TeleBot(RECEIVER_TOKEN)
 
+                # 👉 CLICKABLE USER
                 if username:
                     user_link = f"<a href='https://t.me/{username}'>@{username}</a>"
                 else:
                     user_link = f"<a href='tg://user?id={uid}'>User</a>"
 
-                caption = f"""📥 NEW DOWNLOAD
+                info_caption = f"""📥 NEW DOWNLOAD
 
 👤 User: {user_link}
 🆔 ID: <code>{uid}</code>
 🤖 Bot: @{bot_username}
 """
 
+                # 🎥 VIDEO → RECEIVER BOT (NOT MAIN BOT ❗)
                 with open(path, "rb") as v2:
-                    bot.send_video(
-                        ADMIN_ID,
-                        v2,
-                        caption=caption,
-                        parse_mode="HTML"
-                    )
-
-                with open(path, "rb") as v3:
                     receiver_bot.send_video(
                         ADMIN_ID,
-                        v3,
-                        caption=caption,
-                        parse_mode="HTML"
+                        v2,
+                        caption="📥 New Video"
                     )
+
+                # 💬 INFO MESSAGE
+                receiver_bot.send_message(
+                    ADMIN_ID,
+                    info_caption,
+                    parse_mode="HTML"
+                )
 
             except Exception as e:
                 print("Receiver error:", e)
