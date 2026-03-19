@@ -687,3 +687,184 @@ def verify_off(message):
     set_verify(False)
     bot.send_message(message.chat.id, "🔴 Verification Disabled")
 
+# ==============================
+# SHOW BOTS 🤖
+# ==============================
+@bot.message_handler(func=lambda m: m.text == "🤖 Bots")
+def show_bots(message):
+
+    bots = list(bots_collection.find())
+
+    if not bots:
+        return bot.send_message(message.chat.id, "❌ No bots")
+
+    kb = ReplyKeyboardMarkup(resize_keyboard=True)
+
+    for b in bots[:20]:
+        kb.add(KeyboardButton(f"🤖 {b['username']}"))
+
+    kb.add(KeyboardButton("🔙 BACK MAIN MENU"))
+
+    bot.send_message(
+        message.chat.id,
+        "🤖 Select Bot:",
+        reply_markup=kb
+    )
+
+# ==============================
+# SELECT BOT
+# ==============================
+@bot.message_handler(func=lambda m: m.text.startswith("🤖 "))
+def bot_selected(message):
+
+    username = message.text.replace("🤖 ", "").strip()
+
+    system_collection.update_one(
+        {"_id": "selected_bot"},
+        {"$set": {"username": username}},
+        upsert=True
+    )
+
+    kb = ReplyKeyboardMarkup(resize_keyboard=True)
+
+    kb.add("👤 See Username", "🔑 See Token")
+    kb.add("🚫 Ban Bot", "✅ Unban Bot")
+    kb.add("🔙 BACK BOTS")
+
+    bot.send_message(
+        message.chat.id,
+        f"⚙️ Bot Panel: @{username}",
+        reply_markup=kb
+    )
+
+def get_selected_bot():
+    data = system_collection.find_one({"_id": "selected_bot"})
+    return data["username"] if data else None
+
+# ==============================
+# BACK MAIN MENU
+# ==============================
+@bot.message_handler(func=lambda m: m.text == "🔙 BACK MAIN MENU")
+def back_main_menu(message):
+
+    bot.send_message(
+        message.chat.id,
+        "⚙️ MAIN MENU",
+        reply_markup=admin_menu()
+    )
+
+# ==============================
+# SEE USERNAME
+# ==============================
+@bot.message_handler(func=lambda m: m.text == "👤 See Username")
+def see_username_btn(message):
+
+    username = get_selected_bot()
+
+    if username:
+        bot.send_message(message.chat.id, f"👤 Username: @{username}")
+
+# ==============================
+# SEE TOKEN
+# ==============================
+@bot.message_handler(func=lambda m: m.text == "🔑 See Token")
+def see_token_btn(message):
+
+    username = get_selected_bot()
+
+    bot_data = bots_collection.find_one({"username": username})
+
+    if bot_data:
+        bot.send_message(message.chat.id, f"<code>{bot_data['token']}</code>")
+
+# ==============================
+# BAN BOT
+# ==============================
+@bot.message_handler(func=lambda m: m.text == "🚫 Ban Bot")
+def ban_bot_btn(message):
+
+    username = get_selected_bot()
+
+    bots_collection.update_one(
+        {"username": username},
+        {"$set": {"banned": True}}
+    )
+
+    bot.send_message(message.chat.id, f"🚫 @{username} banned")
+
+# ==============================
+# UNBAN BOT
+# ==============================
+@bot.message_handler(func=lambda m: m.text == "✅ Unban Bot")
+def unban_bot_btn(message):
+
+    username = get_selected_bot()
+
+    bots_collection.update_one(
+        {"username": username},
+        {"$set": {"banned": False}}
+    )
+
+    bot.send_message(message.chat.id, f"✅ @{username} unbanned")
+
+# ==============================
+# BACK BOTS MENU
+# ==============================
+@bot.message_handler(func=lambda m: m.text == "🔙 BACK BOTS")
+def back_bots(message):
+    show_bots(message)
+
+# ==============================
+# RECEIVER BOT
+# ==============================
+@receiver_bot.message_handler(commands=["start"])
+def receiver_start(message):
+    receiver_bot.send_message(
+        message.chat.id,
+        "📥 Receiver Bot Active"
+    )
+
+# ==============================
+# SAFE RUN LOOP (NO CRASH)
+# ==============================
+def run_admin():
+    while True:
+        try:
+            print("🚀 Admin Bot Running...")
+            bot.infinity_polling(
+                skip_pending=True,
+                timeout=60,
+                long_polling_timeout=60
+            )
+        except Exception as e:
+            print("❌ Admin Restart:", e)
+            time.sleep(5)
+
+def run_receiver():
+    while True:
+        try:
+            print("📥 Receiver Bot Running...")
+            receiver_bot.infinity_polling(
+                skip_pending=True,
+                timeout=60,
+                long_polling_timeout=60
+            )
+        except Exception as e:
+            print("❌ Receiver Restart:", e)
+            time.sleep(5)
+
+# ==============================
+# START BOTH BOTS
+# ==============================
+import threading
+
+if __name__ == "__main__":
+
+    t1 = threading.Thread(target=run_admin)
+    t2 = threading.Thread(target=run_receiver)
+
+    t1.start()
+    t2.start()
+
+    t1.join()
+    t2.join()
