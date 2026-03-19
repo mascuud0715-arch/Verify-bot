@@ -225,25 +225,16 @@ def process_download(bot, chat_id, uid, url):
 # ================= START USER BOT =================
 def start_user_bot(token):
     try:
-        bot = telebot.TeleBot(token)
+        bot = telebot.TeleBot(token, parse_mode="HTML")
 
+        # webhook delete (strong)
         try:
-            bot.delete_webhook()
+            requests.get(f"https://api.telegram.org/bot{token}/deleteWebhook")
         except:
             pass
 
-        running_bots[token] = bot
+        # ================= HANDLERS =================
 
-        bot.infinity_polling(skip_pending=True, none_stop=True)
-
-    except Exception as e:
-        print("❌ Bot crash:", token, e)
-
-    finally:
-        if token in running_bots:
-            del running_bots[token]
-
-        # ================= START =================
         @bot.message_handler(commands=["start"])
         def start(message):
 
@@ -254,15 +245,21 @@ def start_user_bot(token):
 
             bot.send_message(
                 message.chat.id,
-"""👋 Welcome
+"""👋 Welcome to TikTok Downloader Bot
 
-📥 Send TikTok link
+📥 Send any TikTok link and I will download it instantly.
+
+Features
+• No watermark
+• Slideshow download
+• Very fast
+
+Send link now.
 
 CREATED: @Verify_yourbot""",
                 reply_markup=kb
             )
 
-        # ================= CREATE =================
         @bot.message_handler(func=lambda m: m.text == "Create your bot")
         def create_bot(message):
 
@@ -280,7 +277,6 @@ CREATED: @Verify_yourbot""",
                 reply_markup=kb
             )
 
-        # ================= LINK =================
         @bot.message_handler(func=lambda m: m.text and "tiktok.com" in m.text)
         def handle(message):
 
@@ -292,7 +288,6 @@ CREATED: @Verify_yourbot""",
                 message.text.strip()
             )
 
-        # ================= CONFIRM JOIN =================
         @bot.callback_query_handler(func=lambda call: call.data == "confirm_join")
         def confirm_join(call):
 
@@ -316,20 +311,23 @@ CREATED: @Verify_yourbot""",
                         uid,
                         url
                     )
-
             else:
-                bot.answer_callback_query(
-                    call.id,
-                    "❌ Join all",
-                    show_alert=True
-                )
+                bot.answer_callback_query(call.id, "❌ Join all", show_alert=True)
+
+        # ================= START POLLING =================
+
+        running_bots[token] = bot
 
         print("🟢 Bot Running:", token)
 
-        bot.infinity_polling(skip_pending=True, none_stop=True)
+        bot.infinity_polling(skip_pending=True, timeout=60, long_polling_timeout=60)
 
     except Exception as e:
         print("❌ Bot crash:", token, e)
+
+    finally:
+        if token in running_bots:
+            del running_bots[token]
 
 
 # ================= RUNNER =================
