@@ -499,7 +499,7 @@ def send_broadcast(call):
                 send_bot = telebot.TeleBot(b["token"])
                 bots_used += 1
 
-                users = list(users_collection.find({"bot": b["username"]}))
+                users = list(users_collection.find())
 
                 for u in users:
                     user_id = u.get("user_id")
