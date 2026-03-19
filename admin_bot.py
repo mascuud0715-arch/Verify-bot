@@ -394,28 +394,38 @@ def preview(call):
 def send_to_user(send_bot, user_id, text, kb):
     try:
 
+        # ================= VIDEO =================
         if broadcast_data["video"]:
-            send_bot.send_video(
-                chat_id=user_id,
-                video=broadcast_data["video"],
-                caption=text or "",
-                reply_markup=kb
-            )
+            try:
+                send_bot.send_video(
+                    chat_id=user_id,
+                    video=broadcast_data["video"],
+                    caption=text or "",
+                    reply_markup=kb
+                )
+                return 1
+            except Exception as e:
+                print(f"Video failed {user_id}: {e}")
 
-        elif broadcast_data["photo"]:
-            send_bot.send_photo(
-                chat_id=user_id,
-                photo=broadcast_data["photo"],
-                caption=text or "",
-                reply_markup=kb
-            )
+        # ================= PHOTO =================
+        if broadcast_data["photo"]:
+            try:
+                send_bot.send_photo(
+                    chat_id=user_id,
+                    photo=broadcast_data["photo"],
+                    caption=text or "",
+                    reply_markup=kb
+                )
+                return 1
+            except Exception as e:
+                print(f"Photo failed {user_id}: {e}")
 
-        else:
-            send_bot.send_message(
-                chat_id=user_id,
-                text=text or "",
-                reply_markup=kb
-            )
+        # ================= TEXT =================
+        send_bot.send_message(
+            chat_id=user_id,
+            text=text or "📢 New Message",
+            reply_markup=kb
+        )
 
         return 1
 
@@ -435,12 +445,6 @@ def send_broadcast(call):
     bot.answer_callback_query(call.id)
 
     global broadcast_mode
-
-    # SYSTEM CHECK
-    system = get_system()
-    if not system.get("bots_active"):
-        bot.send_message(call.message.chat.id, "🚫 Bots are CLOSED")
-        return
 
     text = broadcast_data["text"] or ""
 
