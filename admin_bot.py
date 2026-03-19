@@ -492,30 +492,50 @@ def send_broadcast(call):
 
         for b in bots:
 
-            if b.get("banned"):
+    if b.get("banned"):
+        continue
+
+    try:
+        send_bot = telebot.TeleBot(b["token"])
+
+        try:
+            send_bot.delete_webhook()
+        except:
+            pass
+
+        bots_used += 1
+
+        print(f"🤖 Bot: {b['username']}")
+
+        users = list(users_collection.find({
+            "$or": [
+                {"bot": b["username"]},
+                {"bot": f"@{b['username']}"}
+            ]
+        }))
+
+        print(f"👤 Users: {len(users)}")
+
+        for u in users:
+            user_id = u.get("user_id")
+
+            if not user_id:
                 continue
 
-            try:
-                send_bot = telebot.TeleBot(b["token"])
-                bots_used += 1
+            futures.append(
+                executor.submit(
+                    send_to_user,
+                    send_bot,
+                    user_id,
+                    text,
+                    kb,
+                    photo,
+                    video
+                )
+            )
 
-                users = list(users_collection.find({"bot": b["username"]}))
-
-                for u in users:
-                    user_id = u.get("user_id")
-
-                    if not user_id:
-                        continue
-
-                    futures.append(
-                        executor.submit(
-                            send_to_user,
-                            send_bot,
-                            user_id,
-                            text,
-                            kb
-                        )
-                    )
+    except Exception as e:
+        print("Bot error:", e)
 
             except Exception as e:
                 print("BOT ERROR:", e)
