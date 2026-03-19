@@ -6,70 +6,64 @@ import threading
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 from pymongo import MongoClient
 
-# ---------------- CONFIG ----------------
+# ================= CONFIG =================
 
 TOKEN = os.getenv("VERIFY_BOT_TOKEN")
 MONGO_URL = os.getenv("MONGO_URL")
 
 bot = telebot.TeleBot(TOKEN, threaded=True)
 
-# ---------------- DATABASE ----------------
+# ================= DATABASE =================
 
 client = MongoClient(MONGO_URL, maxPoolSize=200)
-
 db = client["verify_system"]
 
 users_collection = db["users"]
 channels_collection = db["channels"]
 codes_collection = db["codes"]
 
-# ---------------- SAVE USER ----------------
+# indexes
+users_collection.create_index("user_id")
+channels_collection.create_index("username")
+
+# ================= SAVE USER =================
 
 def save_user(user_id):
-
     users_collection.update_one(
         {"user_id": user_id},
         {"$set": {"user_id": user_id}},
         upsert=True
     )
 
-# ---------------- CHECK USER FROM MAIN BOTS ----------------
+# ================= ALLOWED USER =================
 
 def allowed_user(user_id):
-
+    # USER waa inuu kasoo muuqdaa system-ka (runner bots)
     user = users_collection.find_one({"user_id": user_id})
+    return True if user else False
 
-    if user:
-        return True
-
-    return False
-
-# ---------------- GET CHANNELS ----------------
+# ================= GET CHANNELS =================
 
 def get_channels():
 
-    channels = channels_collection.find({"active": True})
-
     result = []
 
-    for c in channels:
-
-        result.append(c["username"])
+    for c in channels_collection.find({"active": True}):
+        username = c.get("username")
+        if username:
+            result.append(username)
 
     return result
 
-# ---------------- CHECK JOIN ----------------
+# ================= CHECK JOIN =================
 
 def check_join(user_id):
 
     channels = get_channels()
-
     not_joined = []
 
     for ch in channels:
-
         try:
-
             member = bot.get_chat_member(ch, user_id)
 
             if member.status in ["left", "kicked"]:
@@ -80,19 +74,19 @@ def check_join(user_id):
 
     return not_joined
 
-# ---------------- START ----------------
+# ================= START =================
 
 @bot.message_handler(commands=["start"])
 def start(message):
 
     user_id = message.from_user.id
 
-    # ALLOW ONLY MAIN BOT USERS
+    # ONLY downloader users allowed
     if not allowed_user(user_id):
 
         bot.send_message(
             message.chat.id,
-            "⛔ You must come from downloader bot first."
+            "⛔ You must use downloader bot first."
         )
         return
 
@@ -105,7 +99,6 @@ def start(message):
         kb = InlineKeyboardMarkup()
 
         for ch in not_joined:
-
             kb.add(
                 InlineKeyboardButton(
                     f"Join {ch}",
@@ -122,15 +115,14 @@ def start(message):
 
         bot.send_message(
             message.chat.id,
-            "⚠️ Please join all channels to continue",
+            "⚠️ Join all channels to continue",
             reply_markup=kb
         )
-
         return
 
     send_verify_panel(message.chat.id)
 
-# ---------------- VERIFY PANEL ----------------
+# ================= VERIFY PANEL =================
 
 def send_verify_panel(chat_id):
 
@@ -139,7 +131,7 @@ def send_verify_panel(chat_id):
     kb.add(
         InlineKeyboardButton(
             "🔐 Generate Code",
-            callback_data="verify"
+            callback_data="generate_code"
         )
     )
 
@@ -149,7 +141,7 @@ def send_verify_panel(chat_id):
         reply_markup=kb
     )
 
-# ---------------- VERIFY JOIN ----------------
+# ================= VERIFY JOIN =================
 
 @bot.callback_query_handler(func=lambda call: call.data == "verify_join")
 def verify_join(call):
@@ -165,30 +157,32 @@ def verify_join(call):
             "❌ Join all channels first",
             show_alert=True
         )
-
         return
 
-    bot.edit_message_text(
-        "✅ Join verified",
-        call.message.chat.id,
-        call.message.message_id
-    )
+    bot.answer_callback_query(call.id, "✅ Verified")
+
+    try:
+        bot.edit_message_text(
+            "✅ Join verified",
+            call.message.chat.id,
+            call.message.message_id
+        )
+    except:
+        pass
 
     send_verify_panel(call.message.chat.id)
 
-# ---------------- GENERATE CODE ----------------
+# ================= GENERATE CODE =================
 
-@bot.callback_query_handler(func=lambda call: call.data == "verify")
-def verify(call):
+@bot.callback_query_handler(func=lambda call: call.data == "generate_code")
+def generate_code(call):
 
     user_id = call.from_user.id
 
-    # 6 DIGIT CODE
+    # 6 digit code
     code = str(random.randint(100000, 999999))
-
     expire_time = int(time.time()) + 300
 
-    # SAVE CODE
     codes_collection.update_one(
         {"user_id": user_id},
         {
@@ -202,30 +196,25 @@ def verify(call):
     )
 
     msg = bot.send_message(
-
         call.message.chat.id,
-
 f"""
 ✅ Verification Code
 
 `{code}`
 
 ⏱ Expires in 5 minutes
-
-Tap code to copy.
 """,
-
         parse_mode="Markdown"
     )
 
-    # AUTO DELETE AFTER 30 SEC
+    # auto delete
     threading.Thread(
         target=delete_code_message,
         args=(msg.chat.id, msg.message_id),
         daemon=True
     ).start()
 
-# ---------------- AUTO DELETE ----------------
+# ================= DELETE CODE MSG =================
 
 def delete_code_message(chat_id, msg_id):
 
@@ -236,6 +225,18 @@ def delete_code_message(chat_id, msg_id):
     except:
         pass
 
-print("Verify Bot Running...")
+# ================= RUN =================
 
-bot.infinity_polling(skip_pending=True)
+def run():
+    while True:
+        try:
+            print("🔐 Verify Bot Running...")
+            bot.infinity_polling(skip_pending=True)
+        except Exception as e:
+            print("Verify crash:", e)
+            time.sleep(5)
+
+# ================= MAIN =================
+
+if __name__ == "__main__":
+    run()
