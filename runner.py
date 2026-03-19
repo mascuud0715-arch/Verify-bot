@@ -224,24 +224,24 @@ def process_download(bot, chat_id, uid, url):
 
 # ================= START USER BOT =================
 def start_user_bot(token):
-
     try:
-        print("🚀 Starting bot:", token)
-
-        bot = telebot.TeleBot(token, parse_mode="HTML")
+        bot = telebot.TeleBot(token)
 
         try:
             bot.delete_webhook()
         except:
             pass
 
-        try:
-            bot.get_me()
-        except Exception as e:
-            print("❌ Invalid token:", token, e)
-            return
-
         running_bots[token] = bot
+
+        bot.infinity_polling(skip_pending=True, none_stop=True)
+
+    except Exception as e:
+        print("❌ Bot crash:", token, e)
+
+    finally:
+        if token in running_bots:
+            del running_bots[token]
 
         # ================= START =================
         @bot.message_handler(commands=["start"])
