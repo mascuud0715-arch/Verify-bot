@@ -51,18 +51,31 @@ def system_status():
     )
 
 # ================= SAVE USER =================
-def save_user(user, bot_username):
-    users_collection.update_one(
-        {"user_id": user.id},
-        {
-            "$set": {
+def save_user(user, bot_username=None):
+    try:
+        # 💥 haddii bot_username la waayo, ha jabin system-ka
+        if not bot_username:
+            return
+
+        users_collection.update_one(
+            {
                 "user_id": user.id,
-                "username": user.username or "",
-                "bot": bot_username   # 💥 THIS IS THE FIX
-            }
-        },
-        upsert=True
-    )
+                "bot": bot_username   # 💥 muhiim: user + bot link
+            },
+            {
+                "$set": {
+                    "user_id": user.id,
+                    "username": user.username or "",
+                    "bot": bot_username,
+                    "first_name": user.first_name or "",
+                    "time": time.time()
+                }
+            },
+            upsert=True
+        )
+
+    except Exception as e:
+        print("❌ Save user error:", e)
 
 # ================= VERIFY =================
 def verify_user(uid):
