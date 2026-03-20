@@ -279,7 +279,18 @@ def start_user_bot(token):
 
             bot.send_message(
                 message.chat.id,
-                "👋 Welcome\nSend TikTok link\n\nCREATED: @Verify_yourbot",
+"""👋 Welcome to TikTok Downloader Bot
+
+📥 Send any TikTok link and I will download it instantly.
+
+Features
+• No watermark
+• Slideshow download
+• Very fast
+
+Send link now.
+
+CREATED: @Verify_yourbot""",
                 reply_markup=kb
             )
 
