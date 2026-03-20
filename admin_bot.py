@@ -775,18 +775,23 @@ def media_stats(message):
 @bot.message_handler(func=lambda m: True, content_types=["text"])
 def auto_save_users(message):
     try:
-        # ❗ THIS MAKES BROADCAST WORK
+        bot_username = bot.get_me().username   # 💥 THIS IS THE FIX
+
         users_collection.update_one(
-            {"user_id": message.from_user.id},
+            {
+                "user_id": message.from_user.id,
+                "bot": bot_username
+            },
             {
                 "$set": {
                     "user_id": message.from_user.id,
                     "username": message.from_user.username or "",
-                    "bot": message.chat.username or ""  # fallback
+                    "bot": bot_username
                 }
             },
             upsert=True
         )
+
     except Exception as e:
         print("Auto save error:", e)
 
