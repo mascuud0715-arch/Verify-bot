@@ -193,8 +193,9 @@ def start(message):
 🤖 Welcome to Bot System
 
 1️⃣ Add your bot  
-2️⃣ Send token  
-3️⃣ Your bot ready  
+2️⃣ Create Your bot From @BotFather
+3️⃣ Send token Eg:12913:js8sbjs
+4️⃣ Your bot ready  
 
 📥 Features:
 • TikTok Downloader  
